@@ -1,0 +1,6 @@
+@ProjectsDonetskWaterHope_HostAddress = http://localhost:5285
+
+GET {{ProjectsDonetskWaterHope_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
