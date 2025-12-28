@@ -102,7 +102,7 @@ builder.Services.AddCors(options =>
         });
 });
 
-var app = builder.Build();
+    var app = builder.Build();
 
 // --- 6. PIPELINE ---
 
@@ -128,17 +128,7 @@ app.MapDeviceEndpoints();
 app.MapSupportTicketEndpoints();
 app.MapAlertEndpoints();
 app.MapConsumptionEndpoints();
-// --- БЛОК SEEDING (Додайте це) ---
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    // Створить БД, якщо її немає (або виконає міграції)
-    db.Database.EnsureCreated();
 
-    // Запускаємо наш сідер
-    ProjectsDonetskWaterHope.Data.DbInitializer.Seed(db);
-}
-// --------------------------------
 
 // ... app.UseSwagger(); ...
 app.Run();
