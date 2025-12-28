@@ -106,15 +106,14 @@ builder.Services.AddCors(options =>
 
 // --- 6. PIPELINE ---
 
-if (app.Environment.IsDevelopment())
-{
+
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "DonetskWaterHope API v1");
         c.RoutePrefix = "swagger";
     });
-}
+
 
 app.UseHttpsRedirection();
 app.UseCors("AllowAll");
