@@ -178,14 +178,21 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
                 if (!string.IsNullOrWhiteSpace(dto.Role))
                 {
-
                     if (!isAdmin)
                     {
                         return Results.Json(new { error = "Користувачам заборонено змінювати свою роль" }, statusCode: 403);
                     }
 
-                    var allowedRoles = new[] { "User", "Admin" }; 
+                    var hasDevices = await db.Devices.AnyAsync(d => d.UserId == id);
+                    if (hasDevices)
+                    {
+                        return Results.BadRequest(new
+                        {
+                            error = "Неможливо змінити роль користувача, поки за ним закріплені активні пристрої (лічильники). Спочатку видаліть або перереєструйте пристрої."
+                        });
+                    }
 
+                    var allowedRoles = new[] { "User", "Admin" };
                     var requestedRole = allowedRoles.FirstOrDefault(r => r.Equals(dto.Role, StringComparison.OrdinalIgnoreCase));
 
                     if (requestedRole == null)
@@ -196,7 +203,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                         });
                     }
 
-                    user.Role = requestedRole; 
+                    user.Role = requestedRole;
                 }
 
                 try

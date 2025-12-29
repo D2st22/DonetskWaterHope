@@ -17,7 +17,10 @@ namespace ProjectsDonetskWaterHope.Endpoints
             {
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
-
+                if (context.User.IsInRole("Admin"))
+                {
+                    return Results.Json(new { error = "Адміністраторам заборонено додавати скарги." }, statusCode: 403);
+                }
                 if (dto.DeviceId.HasValue)
                 {
                     bool isMyDevice = await db.Devices.AnyAsync(d => d.DeviceId == dto.DeviceId && d.UserId == currentUserId);
@@ -154,17 +157,29 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
             group.MapPatch("/{id}", async (int id, UpdateTicketAdminDto dto, HttpContext context, ApplicationDbContext db) =>
             {
+
                 if (!context.User.IsInRole("Admin"))
                     return Results.Json(new { error = "Тільки адміністратор може редагувати звернення." }, statusCode: 403);
 
                 var ticket = await db.SupportTickets.FindAsync(id);
-                if (ticket == null) return Results.NotFound();
+                if (ticket == null) return Results.NotFound(new { error = "Звернення не знайдено." });
+
+                var allowedStatuses = new[] { "Open", "InProgress", "Resolved", "Closed" };
+
+                if (string.IsNullOrWhiteSpace(dto.Status) || !allowedStatuses.Contains(dto.Status))
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = $"Некоректний статус. Дозволені: {string.Join(", ", allowedStatuses)}"
+                    });
+                }
 
                 ticket.Status = dto.Status;
-                if (!string.IsNullOrWhiteSpace(dto.Comment)) ticket.Comment = dto.Comment;
+                if (!string.IsNullOrWhiteSpace(dto.Comment))
+                    ticket.Comment = dto.Comment;
 
                 await db.SaveChangesAsync();
-                return Results.Ok(new { message = "Звернення оновлено." });
+                return Results.Ok(new { message = "Звернення оновлено успішно." });
             }).WithTags("Admin");
 
             group.MapDelete("/{id}", async (int id, HttpContext context, ApplicationDbContext db) =>

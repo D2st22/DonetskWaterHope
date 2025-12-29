@@ -117,12 +117,25 @@ group.MapGet("/{id}", async (int id, HttpContext context, ApplicationDbContext d
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int adminId))
                     return Results.Unauthorized();
 
-                if (!await db.Users.AnyAsync(u => u.UserId == dto.UserId))
+                var targetUser = await db.Users.FindAsync(dto.UserId);
+                if (targetUser == null)
                     return Results.BadRequest(new { error = "Вказаного користувача не існує." });
+
+                if (targetUser.Role == "Admin")
+                {
+                    return Results.BadRequest(new { error = "Заборонено реєструвати пристрої на облікові записи адміністраторів." });
+                }
 
                 if (!await db.Tariffs.AnyAsync(t => t.TariffId == dto.TariffId))
                     return Results.BadRequest(new { error = "Вказаного тарифу не існує." });
-
+                var allowedTypes = new[] { "ColdWater", "HotWater" };
+                if (string.IsNullOrWhiteSpace(dto.Type) || !allowedTypes.Contains(dto.Type))
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = $"Некоректний тип пристрою. Дозволені типи: {string.Join(", ", allowedTypes)}"
+                    });
+                }
                 if (await db.Devices.AnyAsync(d => d.SerialNumber == dto.SerialNumber))
                     return Results.BadRequest(new { error = "Пристрій з таким серійним номером вже зареєстровано." });
 
@@ -186,7 +199,7 @@ group.MapGet("/{id}", async (int id, HttpContext context, ApplicationDbContext d
 
                 if (!string.IsNullOrWhiteSpace(dto.Type))
                 {
-                    var allowedTypes = new[] { "ColdWater", "HotWater", "Electricity", "Gas" };
+                    var allowedTypes = new[] { "ColdWater", "HotWater" };
                     if (!allowedTypes.Contains(dto.Type))
                         return Results.BadRequest(new { error = $"Недопустимий тип. Дозволені: {string.Join(", ", allowedTypes)}" });
 

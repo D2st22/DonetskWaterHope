@@ -16,7 +16,10 @@ namespace ProjectsDonetskWaterHope.Endpoints
             {
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
-
+                if (context.User.IsInRole("Admin"))
+                {
+                    return Results.Json(new { error = "Адміністраторам заборонено вносити показники споживання вручну." }, statusCode: 403);
+                }
                 var device = await db.Devices
                     .Include(d => d.Tariff)
                     .FirstOrDefaultAsync(d => d.DeviceId == dto.DeviceId);
