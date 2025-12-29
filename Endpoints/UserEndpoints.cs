@@ -4,6 +4,8 @@ using ProjectsDonetskWaterHope.DTOs;
 using ProjectsDonetskWaterHope.Models;
 using ProjectsDonetskWaterHope.Services;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Mail; // Р”Р»СЏ РїСЂРѕСЃС‚РѕС— РїРµСЂРµРІС–СЂРєРё Email
+using ProjectsDonetskWaterHope.Validation;
 
 namespace ProjectsDonetskWaterHope.Endpoints
 {
@@ -11,14 +13,24 @@ namespace ProjectsDonetskWaterHope.Endpoints
     {
         public static void MapUserEndpoints(this WebApplication app)
         {
-            // --- РЕЄСТРАЦІЯ ---
-            app.MapPost("/api/auth/register", async (ApplicationDbContext db, RegisterUserDto dto, IServiceProvider services, LoggerService logger) =>
+            // --- Р Р•Р„РЎРўР РђР¦Р†РЇ ---
+            app.MapPost("/api/auth/register", async (ApplicationDbContext db, RegisterUserDto dto, LoggerService logger) =>
             {
-                // Guard Clause 1: Email зайнятий
-                if (await db.Users.AnyAsync(u => u.Email == dto.Email))
-                    return Results.BadRequest(new { error = "Користувач з таким Email вже існує" });
+                // 1. Р’Р°Р»С–РґР°С†С–СЏ Email
+                if (!IsValidEmail(dto.Email))
+                    return Results.BadRequest(new { error = "РќРµРєРѕСЂРµРєС‚РЅРёР№ С„РѕСЂРјР°С‚ Email" });
 
-                // Логіку генерації винесено в окремий метод (див. нижче)
+                // 2. Р’Р°Р»С–РґР°С†С–СЏ С‚РµР»РµС„РѕРЅСѓ Р·Р° РґРѕРїРѕРјРѕРіРѕСЋ UkrainianPhoneAttribute
+                var phoneAttr = new UkrainianPhoneAttribute();
+                if (!phoneAttr.IsValid(dto.PhoneNumber))
+                    return Results.BadRequest(new { error = "РќРµРєРѕСЂРµРєС‚РЅРёР№ С„РѕСЂРјР°С‚ СѓРєСЂР°С—РЅСЃСЊРєРѕРіРѕ РЅРѕРјРµСЂР° С‚РµР»РµС„РѕРЅСѓ" });
+
+                // 3. РџРµСЂРµРІС–СЂРєР° РЅР° СѓРЅС–РєР°Р»СЊРЅС–СЃС‚СЊ
+                if (await db.Users.AnyAsync(u => u.Email == dto.Email))
+                    return Results.BadRequest(new { error = "РљРѕСЂРёСЃС‚СѓРІР°С‡ Р· С‚Р°РєРёРј Email РІР¶Рµ С–СЃРЅСѓС”" });
+
+                // 4. РќРѕСЂРјР°Р»С–Р·Р°С†С–СЏ С‚РµР»РµС„РѕРЅСѓ РїРµСЂРµРґ Р·Р°РїРёСЃРѕРј РІ Р±Р°Р·Сѓ
+                string normalizedPhone = UkrainianPhoneAttribute.NormalizePhone(dto.PhoneNumber);
                 string newAccountNumber = await GenerateUniqueAccountNumber(db);
 
                 var user = new User
@@ -26,8 +38,8 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     AccountNumber = newAccountNumber,
                     FirstName = dto.FirstName,
                     LastName = dto.LastName,
-                    Email = dto.Email,
-                    PhoneNumber = dto.PhoneNumber,
+                    Email = dto.Email.ToLower().Trim(),
+                    PhoneNumber = normalizedPhone,
                     PasswordHash = PasswordHasher.HashPassword(dto.Password),
                     Role = "User"
                 };
@@ -35,23 +47,19 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 db.Users.Add(user);
                 await db.SaveChangesAsync();
 
-                // Тут могла бути відправка листа...
-                await logger.LogAsync("UserRegistered", $"Новий користувач: {user.FirstName} {user.LastName} ({user.AccountNumber})", user.UserId);
+                await logger.LogAsync("UserRegistered", $"РќРѕРІРёР№ РєРѕСЂРёСЃС‚СѓРІР°С‡: {user.FirstName} ({user.AccountNumber})", user.UserId);
 
-               
-                return Results.Ok(new UserDto(
-                    user.UserId, user.AccountNumber, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Role
-                ));
+                return Results.Ok(new UserDto(user.UserId, user.AccountNumber, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Role));
             });
 
-            // --- ЛОГІН ---
+            // --- Р›РћР“Р†Рќ ---
             app.MapPost("/api/auth/login", async (ApplicationDbContext db, TokenService tokenService, LoginDto dto) =>
             {
                 var user = await db.Users.FirstOrDefaultAsync(u => u.AccountNumber == dto.AccountNumber);
 
-                // Guard Clause: Невірні дані
+                // Guard Clause: РќРµРІС–СЂРЅС– РґР°РЅС–
                 if (user == null || !PasswordHasher.VerifyPassword(dto.Password, user.PasswordHash))
-                    return Results.BadRequest(new { error = "Невірний особовий рахунок або пароль" });
+                    return Results.BadRequest(new { error = "РќРµРІС–СЂРЅРёР№ РѕСЃРѕР±РѕРІРёР№ СЂР°С…СѓРЅРѕРє Р°Р±Рѕ РїР°СЂРѕР»СЊ" });
 
                 var tokenString = tokenService.GenerateToken(user);
 
@@ -63,7 +71,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 ));
             });
 
-            // --- ОТРИМАННЯ ПРОФІЛЮ ---
+            // --- РћРўР РРњРђРќРќРЇ РџР РћР¤Р†Р›Р® ---
             app.MapGet("/api/users/{id}", async (int id, ApplicationDbContext db) =>
             {
                 var userDto = await db.Users
@@ -75,41 +83,50 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
                 return userDto is not null
                     ? Results.Ok(userDto)
-                    : Results.NotFound(new { message = "Користувача не знайдено" });
+                    : Results.NotFound(new { message = "РљРѕСЂРёСЃС‚СѓРІР°С‡Р° РЅРµ Р·РЅР°Р№РґРµРЅРѕ" });
             }).RequireAuthorization();
 
-            // --- ЗМІНА ДАНИХ (PATCH) ---
+            // --- Р—РњР†РќРђ Р”РђРќРРҐ (PATCH) ---
             app.MapPatch("/api/users/{id}", async (int id, UpdateUserDto dto, HttpContext context, ApplicationDbContext db) =>
             {
-                // Отримуємо ID поточного юзера
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
 
-                bool isAdmin = context.User.IsInRole("Admin"); // Використовуємо IsInRole
+                bool isAdmin = context.User.IsInRole("Admin");
                 bool isSelf = currentUserId == id;
 
-                // Guard Clause: Перевірка прав
                 if (!isSelf && !isAdmin)
-                    return Results.Json(new { error = "Недостатньо прав для редагування цього профілю" }, statusCode: 403);
+                    return Results.Json(new { error = "РќРµРґРѕСЃС‚Р°С‚РЅСЊРѕ РїСЂР°РІ РґР»СЏ СЂРµРґР°РіСѓРІР°РЅРЅСЏ С†СЊРѕРіРѕ РїСЂРѕС„С–Р»СЋ" }, statusCode: 403);
 
                 var user = await db.Users.FindAsync(id);
                 if (user == null) return Results.NotFound();
 
-                // Оновлення полів (тільки якщо прийшли нові дані)
                 if (!string.IsNullOrWhiteSpace(dto.FirstName)) user.FirstName = dto.FirstName;
                 if (!string.IsNullOrWhiteSpace(dto.LastName)) user.LastName = dto.LastName;
-                if (!string.IsNullOrWhiteSpace(dto.PhoneNumber)) user.PhoneNumber = dto.PhoneNumber;
 
-                // Адмінські зміни
+                // Р’Р°Р»С–РґР°С†С–СЏ С‚РµР»РµС„РѕРЅСѓ РїСЂРё РѕРЅРѕРІР»РµРЅРЅС–
+                if (!string.IsNullOrWhiteSpace(dto.PhoneNumber))
+                {
+                    var phoneAttr = new UkrainianPhoneAttribute();
+                    if (!phoneAttr.IsValid(dto.PhoneNumber))
+                        return Results.BadRequest(new { error = "РќРµРєРѕСЂРµРєС‚РЅРёР№ С„РѕСЂРјР°С‚ С‚РµР»РµС„РѕРЅСѓ" });
+
+                    user.PhoneNumber = UkrainianPhoneAttribute.NormalizePhone(dto.PhoneNumber);
+                }
+
                 if (isAdmin)
                 {
                     if (!string.IsNullOrWhiteSpace(dto.Role)) user.Role = dto.Role;
 
                     if (!string.IsNullOrWhiteSpace(dto.Email) && dto.Email != user.Email)
                     {
+                        if (!IsValidEmail(dto.Email))
+                            return Results.BadRequest(new { error = "РќРµРєРѕСЂРµРєС‚РЅРёР№ С„РѕСЂРјР°С‚ РЅРѕРІРѕРіРѕ Email" });
+
                         if (await db.Users.AnyAsync(u => u.Email == dto.Email && u.UserId != id))
-                            return Results.BadRequest(new { error = "Email вже зайнятий іншим користувачем" });
-                        user.Email = dto.Email;
+                            return Results.BadRequest(new { error = "Email РІР¶Рµ Р·Р°Р№РЅСЏС‚РёР№ С–РЅС€РёРј РєРѕСЂРёСЃС‚СѓРІР°С‡РµРј" });
+
+                        user.Email = dto.Email.ToLower().Trim();
                     }
                 }
 
@@ -120,13 +137,13 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 ));
             }).RequireAuthorization();
 
-            // --- ОТРИМАННЯ ВСІХ (Тільки Admin) ---
+            // --- РћРўР РРњРђРќРќРЇ Р’РЎР†РҐ (РўС–Р»СЊРєРё Admin) ---
             app.MapGet("/api/users", async (HttpContext context, ApplicationDbContext db) =>
             {
-                // Guard Clause: Тільки адмін
+                // Guard Clause: РўС–Р»СЊРєРё Р°РґРјС–РЅ
                 if (!context.User.IsInRole("Admin"))
                 {
-                    return Results.Json(new { error = "Доступ заборонено. Потрібні права адміністратора." }, statusCode: 403);
+                    return Results.Json(new { error = "Р”РѕСЃС‚СѓРї Р·Р°Р±РѕСЂРѕРЅРµРЅРѕ. РџРѕС‚СЂС–Р±РЅС– РїСЂР°РІР° Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂР°." }, statusCode: 403);
                 }
 
                 var users = await db.Users
@@ -138,36 +155,45 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(users);
             }).RequireAuthorization();
 
-            // --- ВИДАЛЕННЯ (Тільки Admin + Безпека даних) ---
+            // --- Р’РР”РђР›Р•РќРќРЇ (РўС–Р»СЊРєРё Admin + Р‘РµР·РїРµРєР° РґР°РЅРёС…) ---
             app.MapDelete("/api/users/{id}", async (int id, HttpContext context, ApplicationDbContext db) =>
             {
-                // 1. Guard Clause: Безпека
+                // 1. Guard Clause: Р‘РµР·РїРµРєР°
                 if (!context.User.IsInRole("Admin"))
                 {
-                    return Results.Json(new { error = "Тільки адміністратор може видаляти користувачів." }, statusCode: 403);
+                    return Results.Json(new { error = "РўС–Р»СЊРєРё Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ РјРѕР¶Рµ РІРёРґР°Р»СЏС‚Рё РєРѕСЂРёСЃС‚СѓРІР°С‡С–РІ." }, statusCode: 403);
                 }
 
-                // 2. Пошук
+                // 2. РџРѕС€СѓРє
                 var user = await db.Users.FindAsync(id);
                 if (user == null)
-                    return Results.NotFound(new { message = "Користувача не знайдено." });
+                    return Results.NotFound(new { message = "РљРѕСЂРёСЃС‚СѓРІР°С‡Р° РЅРµ Р·РЅР°Р№РґРµРЅРѕ." });
 
-                // 3. Видалення з обробкою помилок (Try-Catch)
+                // 3. Р’РёРґР°Р»РµРЅРЅСЏ Р· РѕР±СЂРѕР±РєРѕСЋ РїРѕРјРёР»РѕРє (Try-Catch)
                 try
                 {
                     db.Users.Remove(user);
                     await db.SaveChangesAsync();
-                    return Results.Ok(new { message = $"Користувача {user.AccountNumber} видалено." });
+                    return Results.Ok(new { message = $"РљРѕСЂРёСЃС‚СѓРІР°С‡Р° {user.AccountNumber} РІРёРґР°Р»РµРЅРѕ." });
                 }
                 catch (DbUpdateException)
                 {
-                    // Якщо база не дає видалити через зв'язки з Devices/Tickets
-                    return Results.Conflict(new { error = "Неможливо видалити користувача: у нього є активні лічильники або звернення." });
+                    // РЇРєС‰Рѕ Р±Р°Р·Р° РЅРµ РґР°С” РІРёРґР°Р»РёС‚Рё С‡РµСЂРµР· Р·РІ'СЏР·РєРё Р· Devices/Tickets
+                    return Results.Conflict(new { error = "РќРµРјРѕР¶Р»РёРІРѕ РІРёРґР°Р»РёС‚Рё РєРѕСЂРёСЃС‚СѓРІР°С‡Р°: Сѓ РЅСЊРѕРіРѕ С” Р°РєС‚РёРІРЅС– Р»С–С‡РёР»СЊРЅРёРєРё Р°Р±Рѕ Р·РІРµСЂРЅРµРЅРЅСЏ." });
                 }
             }).RequireAuthorization();
         }
-
-        // --- PRIVATE HELPER METHOD (Чистий код: винесли складну логіку) ---
+        private static bool IsValidEmail(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email)) return false;
+            try
+            {
+                var addr = new MailAddress(email);
+                return addr.Address == email;
+            }
+            catch { return false; }
+        }
+        // --- PRIVATE HELPER METHOD (Р§РёСЃС‚РёР№ РєРѕРґ: РІРёРЅРµСЃР»Рё СЃРєР»Р°РґРЅСѓ Р»РѕРіС–РєСѓ) ---
         private static async Task<string> GenerateUniqueAccountNumber(ApplicationDbContext db)
         {
             var random = new Random();
