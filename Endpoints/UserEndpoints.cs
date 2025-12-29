@@ -99,26 +99,13 @@ namespace ProjectsDonetskWaterHope.Endpoints
             });
 
             // --- ОТРИМАННЯ ПРОФІЛЮ ---
-            app.MapGet("/api/users/{id}", async (int id, ApplicationDbContext db) =>
-            {
-                var userDto = await db.Users
-                    .Where(u => u.UserId == id)
-                    .Select(u => new UserDto(
-                        u.UserId, u.AccountNumber, u.FirstName, u.LastName, u.Email, u.PhoneNumber, u.Role
-                    ))
-                    .FirstOrDefaultAsync();
-
-                return userDto is not null
-                    ? Results.Ok(userDto)
-                    : Results.NotFound(new { message = "Користувача не знайдено" });
-            }).RequireAuthorization();
-
             app.MapPatch("/api/users/{id}", async (
                 int id,
                 UpdateUserDto dto,
                 HttpContext context,
                 ApplicationDbContext db) =>
             {
+                // Отримуємо ID поточного користувача з токена
                 if (!int.TryParse(
                     context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value,
                     out int currentUserId))
@@ -127,12 +114,16 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 bool isAdmin = context.User.IsInRole("Admin");
                 bool isSelf = currentUserId == id;
 
+                // --- ПЕРЕВІРКА ПРАВ ДОСТУПУ ---
+                // Якщо користувач намагається змінити не себе і він не адмін
                 if (!isSelf && !isAdmin)
-                    return Results.Forbid();
+                {
+                    return Results.Json(new { error = "Вам заборонено змінювати дані інших користувачів" }, statusCode: 403);
+                }
 
                 var user = await db.Users.FindAsync(id);
                 if (user == null)
-                    return Results.NotFound();
+                    return Results.NotFound(new { error = "Користувача не знайдено" });
 
                 // --- ІМʼЯ / ПРІЗВИЩЕ ---
                 if (!string.IsNullOrWhiteSpace(dto.FirstName))
@@ -155,23 +146,27 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 if (!string.IsNullOrWhiteSpace(dto.Email))
                 {
                     var normalizedEmail = dto.Email.ToLower().Trim();
-
                     if (!IsValidEmail(normalizedEmail))
                         return Results.BadRequest(new { error = "Некоректний формат Email" });
 
                     if (normalizedEmail != user.Email)
                     {
-                        if (await db.Users.AnyAsync(u =>
-                                u.Email == normalizedEmail && u.UserId != id))
-                            return Results.BadRequest(new { error = "Email вже зайнятий" });
+                        if (await db.Users.AnyAsync(u => u.Email == normalizedEmail && u.UserId != id))
+                            return Results.BadRequest(new { error = "Email вже зайнятий іншим акаунтом" });
 
                         user.Email = normalizedEmail;
                     }
                 }
 
                 // --- ROLE (ТІЛЬКИ ADMIN) ---
-                if (isAdmin && !string.IsNullOrWhiteSpace(dto.Role))
+                if (!string.IsNullOrWhiteSpace(dto.Role))
+                {
+                    if (!isAdmin)
+                    {
+                        return Results.Json(new { error = "Користувачам заборонено змінювати свою роль" }, statusCode: 403);
+                    }
                     user.Role = dto.Role;
+                }
 
                 try
                 {
@@ -179,7 +174,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 }
                 catch (DbUpdateException)
                 {
-                    return Results.Conflict(new { error = "Конфлікт даних (можливо Email вже існує)" });
+                    return Results.Conflict(new { error = "Помилка при оновленні даних у базі" });
                 }
 
                 return Results.Ok(new UserDto(
