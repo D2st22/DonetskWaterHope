@@ -11,14 +11,14 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
             group.MapGet("/", async (ApplicationDbContext db, HttpContext context) =>
             {
-                // “≥Î¸ÍË ¿‰Ï≥Ì Ï‡∫ ‰ÓÒÚÛÔ
+                // –¢—ñ–ª—å–∫–∏ –ê–¥–º—ñ–Ω –º–∞—î –¥–æ—Å—Ç—É–ø
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "ƒÓÒÚÛÔ Á‡·ÓÓÌÂÌÓ" }, statusCode: 403);
+                    return Results.Json(new { error = "–î–æ—Å—Ç—É–ø –∑–∞–±–æ—Ä–æ–Ω–µ–Ω–æ" }, statusCode: 403);
 
                 var logs = await db.SystemLogs
                     .AsNoTracking()
-                    .OrderByDescending(l => l.CreatedAt) // —ÔÓ˜‡ÚÍÛ ÌÓ‚≥
-                    .Take(100) // ¡ÂÂÏÓ ÓÒÚ‡ÌÌ≥ 100 ÔÓ‰≥È
+                    .OrderByDescending(l => l.CreatedAt) // –°–ø–æ—á–∞—Ç–∫—É –Ω–æ–≤—ñ
+                    .Take(100) // –ë–µ—Ä–µ–º–æ –æ—Å—Ç–∞–Ω–Ω—ñ 100 –ø–æ–¥—ñ–π
                     .ToListAsync();
 
                 return Results.Ok(logs);

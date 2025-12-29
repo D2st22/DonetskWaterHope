@@ -18,12 +18,12 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
 
-                // Валідація девайса
+                // Р’Р°Р»С–РґР°С†С–СЏ РґРµРІР°Р№СЃР°
                 if (dto.DeviceId.HasValue)
                 {
                     bool isMyDevice = await db.Devices.AnyAsync(d => d.DeviceId == dto.DeviceId && d.UserId == currentUserId);
                     if (!isMyDevice)
-                        return Results.BadRequest(new { error = "Ви не можете створити звернення щодо чужого пристрою." });
+                        return Results.BadRequest(new { error = "Р’Рё РЅРµ РјРѕР¶РµС‚Рµ СЃС‚РІРѕСЂРёС‚Рё Р·РІРµСЂРЅРµРЅРЅСЏ С‰РѕРґРѕ С‡СѓР¶РѕРіРѕ РїСЂРёСЃС‚СЂРѕСЋ." });
                 }
 
                 var ticket = new SupportTicket
@@ -39,23 +39,23 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 db.SupportTickets.Add(ticket);
                 await db.SaveChangesAsync();
 
-                // ЛОГУВАННЯ
+                // Р›РћР“РЈР’РђРќРќРЇ
                 await logger.LogAsync(
                     "TicketCreated",
-                    $"Нове звернення: {ticket.Subject}",
+                    $"РќРѕРІРµ Р·РІРµСЂРЅРµРЅРЅСЏ: {ticket.Subject}",
                     currentUserId,
                     ticket.DeviceId
                 );
 
-                return Results.Created($"/api/tickets/{ticket.SupportTicketId}", new { message = "Звернення створено", id = ticket.SupportTicketId });
+                return Results.Created($"/api/tickets/{ticket.SupportTicketId}", new { message = "Р—РІРµСЂРЅРµРЅРЅСЏ СЃС‚РІРѕСЂРµРЅРѕ", id = ticket.SupportTicketId });
             });
 
-            // --- 2. ОТРИМАННЯ ВСІХ ТІКЕТІВ (Тільки Admin) ---
+            // --- 2. РћРўР РРњРђРќРќРЇ Р’РЎР†РҐ РўР†РљР•РўР†Р’ (РўС–Р»СЊРєРё Admin) ---
             group.MapGet("/all", async (HttpContext context, ApplicationDbContext db) =>
             {
-                // Guard Clause: Тільки Адмін
+                // Guard Clause: РўС–Р»СЊРєРё РђРґРјС–РЅ
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Доступ заборонено. Потрібні права адміністратора." }, statusCode: 403);
+                    return Results.Json(new { error = "Р”РѕСЃС‚СѓРї Р·Р°Р±РѕСЂРѕРЅРµРЅРѕ. РџРѕС‚СЂС–Р±РЅС– РїСЂР°РІР° Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂР°." }, statusCode: 403);
 
                 var tickets = await db.SupportTickets
                     .AsNoTracking()
@@ -72,7 +72,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(tickets);
             });
 
-            // --- 3. ОТРИМАННЯ "МОЇХ" ТІКЕТІВ (Залогінений юзер) ---
+            // --- 3. РћРўР РРњРђРќРќРЇ "РњРћР‡РҐ" РўР†РљР•РўР†Р’ (Р—Р°Р»РѕРіС–РЅРµРЅРёР№ СЋР·РµСЂ) ---
             group.MapGet("/my", async (HttpContext context, ApplicationDbContext db) =>
             {
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
@@ -80,7 +80,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
                 var tickets = await db.SupportTickets
                     .AsNoTracking()
-                    .Where(t => t.UserId == currentUserId) // Фільтр: Тільки мої
+                    .Where(t => t.UserId == currentUserId) // Р¤С–Р»СЊС‚СЂ: РўС–Р»СЊРєРё РјРѕС—
                     .Include(t => t.User)
                     .Include(t => t.Device)
                     .Select(t => new SupportTicketDto(
@@ -94,32 +94,32 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(tickets);
             });
 
-            // --- 4. ОТРИМАННЯ КОНКРЕТНОГО ТІКЕТА ПО ID ---
+            // --- 4. РћРўР РРњРђРќРќРЇ РљРћРќРљР Р•РўРќРћР“Рћ РўР†РљР•РўРђ РџРћ ID ---
             group.MapGet("/{id}", async (int id, HttpContext context, ApplicationDbContext db) =>
             {
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
 
-                // Спочатку шукаємо тікет (без проекції, щоб перевірити права)
+                // РЎРїРѕС‡Р°С‚РєСѓ С€СѓРєР°С”РјРѕ С‚С–РєРµС‚ (Р±РµР· РїСЂРѕРµРєС†С–С—, С‰РѕР± РїРµСЂРµРІС–СЂРёС‚Рё РїСЂР°РІР°)
                 var ticket = await db.SupportTickets
                     .Include(t => t.User)
                     .Include(t => t.Device)
-                    .AsNoTracking() // Важливо для швидкодії
+                    .AsNoTracking() // Р’Р°Р¶Р»РёРІРѕ РґР»СЏ С€РІРёРґРєРѕРґС–С—
                     .FirstOrDefaultAsync(t => t.SupportTicketId == id);
 
                 if (ticket == null)
-                    return Results.NotFound(new { message = "Звернення не знайдено." });
+                    return Results.NotFound(new { message = "Р—РІРµСЂРЅРµРЅРЅСЏ РЅРµ Р·РЅР°Р№РґРµРЅРѕ." });
 
-                // Перевірка прав: Адмін або Власник
+                // РџРµСЂРµРІС–СЂРєР° РїСЂР°РІ: РђРґРјС–РЅ Р°Р±Рѕ Р’Р»Р°СЃРЅРёРє
                 bool isAdmin = context.User.IsInRole("Admin");
                 bool isOwner = ticket.UserId == currentUserId;
 
                 if (!isAdmin && !isOwner)
                 {
-                    return Results.Json(new { error = "Це не ваше звернення." }, statusCode: 403);
+                    return Results.Json(new { error = "Р¦Рµ РЅРµ РІР°С€Рµ Р·РІРµСЂРЅРµРЅРЅСЏ." }, statusCode: 403);
                 }
 
-                // Формуємо DTO вручну, бо ми вже витягли дані з бази
+                // Р¤РѕСЂРјСѓС”РјРѕ DTO РІСЂСѓС‡РЅСѓ, Р±Рѕ РјРё РІР¶Рµ РІРёС‚СЏРіР»Рё РґР°РЅС– Р· Р±Р°Р·Рё
                 var dto = new SupportTicketDto(
                     ticket.SupportTicketId,
                     ticket.Subject,
@@ -134,11 +134,11 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(dto);
             });
 
-            // --- 5. РЕДАГУВАННЯ (Тільки Admin) ---
+            // --- 5. Р Р•Р”РђР“РЈР’РђРќРќРЇ (РўС–Р»СЊРєРё Admin) ---
             group.MapPatch("/{id}", async (int id, UpdateTicketAdminDto dto, HttpContext context, ApplicationDbContext db) =>
             {
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Тільки адміністратор може редагувати звернення." }, statusCode: 403);
+                    return Results.Json(new { error = "РўС–Р»СЊРєРё Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ РјРѕР¶Рµ СЂРµРґР°РіСѓРІР°С‚Рё Р·РІРµСЂРЅРµРЅРЅСЏ." }, statusCode: 403);
 
                 var ticket = await db.SupportTickets.FindAsync(id);
                 if (ticket == null) return Results.NotFound();
@@ -147,14 +147,14 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 if (!string.IsNullOrWhiteSpace(dto.Comment)) ticket.Comment = dto.Comment;
 
                 await db.SaveChangesAsync();
-                return Results.Ok(new { message = "Звернення оновлено." });
+                return Results.Ok(new { message = "Р—РІРµСЂРЅРµРЅРЅСЏ РѕРЅРѕРІР»РµРЅРѕ." });
             });
 
-            // --- 6. ВИДАЛЕННЯ (Тільки Admin) ---
+            // --- 6. Р’РР”РђР›Р•РќРќРЇ (РўС–Р»СЊРєРё Admin) ---
             group.MapDelete("/{id}", async (int id, HttpContext context, ApplicationDbContext db) =>
             {
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Тільки адміністратор може видаляти звернення." }, statusCode: 403);
+                    return Results.Json(new { error = "РўС–Р»СЊРєРё Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ РјРѕР¶Рµ РІРёРґР°Р»СЏС‚Рё Р·РІРµСЂРЅРµРЅРЅСЏ." }, statusCode: 403);
 
                 var ticket = await db.SupportTickets.FindAsync(id);
                 if (ticket == null) return Results.NotFound();
@@ -162,7 +162,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 db.SupportTickets.Remove(ticket);
                 await db.SaveChangesAsync();
 
-                return Results.Ok(new { message = "Звернення видалено." });
+                return Results.Ok(new { message = "Р—РІРµСЂРЅРµРЅРЅСЏ РІРёРґР°Р»РµРЅРѕ." });
             });
         }
     }

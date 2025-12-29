@@ -13,29 +13,29 @@ namespace ProjectsDonetskWaterHope.Endpoints
         {
             var group = app.MapGroup("/api/alerts").RequireAuthorization();
 
-            // --- 1. СТВОРЕННЯ СПОВІЩЕННЯ (Тільки Admin) ---
+            // --- 1. РЎРўР’РћР Р•РќРќРЇ РЎРџРћР’Р†Р©Р•РќРќРЇ (РўС–Р»СЊРєРё Admin) ---
             group.MapPost("/", async (CreateAlertDto dto, ApplicationDbContext db, HttpContext context, LoggerService logger) =>
             {
-                // 1. Отримуємо ID того, хто стукає (User або Admin)
+                // 1. РћС‚СЂРёРјСѓС”РјРѕ ID С‚РѕРіРѕ, С…С‚Рѕ СЃС‚СѓРєР°С” (User Р°Р±Рѕ Admin)
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
 
-                // 2. Шукаємо пристрій
+                // 2. РЁСѓРєР°С”РјРѕ РїСЂРёСЃС‚СЂС–Р№
                 var device = await db.Devices.FirstOrDefaultAsync(d => d.DeviceId == dto.DeviceId);
                 if (device == null)
-                    return Results.BadRequest(new { error = "Пристрій з вказаним ID не знайдено." });
+                    return Results.BadRequest(new { error = "РџСЂРёСЃС‚СЂС–Р№ Р· РІРєР°Р·Р°РЅРёРј ID РЅРµ Р·РЅР°Р№РґРµРЅРѕ." });
 
-                // 3. ВАЖЛИВО: Перевірка прав (Адмін АБО Власник)
-                // Це дозволяє IoT-пристрою (Власнику) відправляти дані без помилки 403
+                // 3. Р’РђР–Р›РР’Рћ: РџРµСЂРµРІС–СЂРєР° РїСЂР°РІ (РђРґРјС–РЅ РђР‘Рћ Р’Р»Р°СЃРЅРёРє)
+                // Р¦Рµ РґРѕР·РІРѕР»СЏС” IoT-РїСЂРёСЃС‚СЂРѕСЋ (Р’Р»Р°СЃРЅРёРєСѓ) РІС–РґРїСЂР°РІР»СЏС‚Рё РґР°РЅС– Р±РµР· РїРѕРјРёР»РєРё 403
                 bool isAdmin = context.User.IsInRole("Admin");
                 bool isOwner = device.UserId == currentUserId;
 
                 if (!isAdmin && !isOwner)
                 {
-                    return Results.Json(new { error = "Ви не можете надсилати сповіщення від чужого пристрою." }, statusCode: 403);
+                    return Results.Json(new { error = "Р’Рё РЅРµ РјРѕР¶РµС‚Рµ РЅР°РґСЃРёР»Р°С‚Рё СЃРїРѕРІС–С‰РµРЅРЅСЏ РІС–Рґ С‡СѓР¶РѕРіРѕ РїСЂРёСЃС‚СЂРѕСЋ." }, statusCode: 403);
                 }
 
-                // 4. Створення сповіщення
+                // 4. РЎС‚РІРѕСЂРµРЅРЅСЏ СЃРїРѕРІС–С‰РµРЅРЅСЏ
                 var alert = new Alert
                 {
                     DeviceId = dto.DeviceId,
@@ -47,30 +47,30 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 db.Alerts.Add(alert);
                 await db.SaveChangesAsync();
 
-                // 5. ЛОГУВАННЯ ПОДІЇ (Тільки якщо це критична помилка)
+                // 5. Р›РћР“РЈР’РђРќРќРЇ РџРћР”Р†Р‡ (РўС–Р»СЊРєРё СЏРєС‰Рѕ С†Рµ РєСЂРёС‚РёС‡РЅР° РїРѕРјРёР»РєР°)
                 if (dto.Type == "Critical")
                 {
-                    // Записуємо в системний лог, щоб адмін бачив це в історії
+                    // Р—Р°РїРёСЃСѓС”РјРѕ РІ СЃРёСЃС‚РµРјРЅРёР№ Р»РѕРі, С‰РѕР± Р°РґРјС–РЅ Р±Р°С‡РёРІ С†Рµ РІ С–СЃС‚РѕСЂС–С—
                     await logger.LogAsync(
                         "LeakDetected",
-                        $"УВАГА! Витік води на пристрої {dto.DeviceId}: {dto.MessageText}",
-                        device.UserId, // Прив'язуємо до власника
-                        dto.DeviceId   // Прив'язуємо до пристрою
+                        $"РЈР’РђР“Рђ! Р’РёС‚С–Рє РІРѕРґРё РЅР° РїСЂРёСЃС‚СЂРѕС— {dto.DeviceId}: {dto.MessageText}",
+                        device.UserId, // РџСЂРёРІ'СЏР·СѓС”РјРѕ РґРѕ РІР»Р°СЃРЅРёРєР°
+                        dto.DeviceId   // РџСЂРёРІ'СЏР·СѓС”РјРѕ РґРѕ РїСЂРёСЃС‚СЂРѕСЋ
                     );
                 }
 
-                return Results.Created($"/api/alerts/{alert.AlertId}", new { message = "Сповіщення створено." });
+                return Results.Created($"/api/alerts/{alert.AlertId}", new { message = "РЎРїРѕРІС–С‰РµРЅРЅСЏ СЃС‚РІРѕСЂРµРЅРѕ." });
             });
 
-            // --- 2. ОТРИМАННЯ ВСІХ (Тільки Admin) ---
+            // --- 2. РћРўР РРњРђРќРќРЇ Р’РЎР†РҐ (РўС–Р»СЊРєРё Admin) ---
             group.MapGet("/all", async (HttpContext context, ApplicationDbContext db) =>
             {
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Доступ заборонено." }, statusCode: 403);
+                    return Results.Json(new { error = "Р”РѕСЃС‚СѓРї Р·Р°Р±РѕСЂРѕРЅРµРЅРѕ." }, statusCode: 403);
 
                 var alerts = await db.Alerts
                     .AsNoTracking()
-                    .Include(a => a.Device).ThenInclude(d => d.User) // Підтягуємо власника
+                    .Include(a => a.Device).ThenInclude(d => d.User) // РџС–РґС‚СЏРіСѓС”РјРѕ РІР»Р°СЃРЅРёРєР°
                     .OrderByDescending(a => a.CreatedAt)
                     .Select(a => new AlertDto(
                         a.AlertId, a.MessageText, a.Type, a.CreatedAt,
@@ -82,8 +82,8 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(alerts);
             });
 
-            // --- 3. ОТРИМАННЯ "МОЇХ" (Для User) ---
-            // Показує сповіщення по ВСІХ пристроях, що належать юзеру
+            // --- 3. РћРўР РРњРђРќРќРЇ "РњРћР‡РҐ" (Р”Р»СЏ User) ---
+            // РџРѕРєР°Р·СѓС” СЃРїРѕРІС–С‰РµРЅРЅСЏ РїРѕ Р’РЎР†РҐ РїСЂРёСЃС‚СЂРѕСЏС…, С‰Рѕ РЅР°Р»РµР¶Р°С‚СЊ СЋР·РµСЂСѓ
             group.MapGet("/my", async (HttpContext context, ApplicationDbContext db) =>
             {
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
@@ -91,7 +91,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
                 var alerts = await db.Alerts
                     .AsNoTracking()
-                    // Фільтруємо: беремо алерти, де Device належить поточному User
+                    // Р¤С–Р»СЊС‚СЂСѓС”РјРѕ: Р±РµСЂРµРјРѕ Р°Р»РµСЂС‚Рё, РґРµ Device РЅР°Р»РµР¶РёС‚СЊ РїРѕС‚РѕС‡РЅРѕРјСѓ User
                     .Where(a => a.Device.UserId == currentUserId)
                     .Include(a => a.Device).ThenInclude(d => d.User)
                     .OrderByDescending(a => a.CreatedAt)
@@ -105,26 +105,26 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(alerts);
             });
 
-            // --- 4. ОТРИМАННЯ ПО КОНКРЕТНОМУ ПРИСТРОЮ (Smart Access) ---
+            // --- 4. РћРўР РРњРђРќРќРЇ РџРћ РљРћРќРљР Р•РўРќРћРњРЈ РџР РРЎРўР РћР® (Smart Access) ---
             group.MapGet("/device/{deviceId}", async (int deviceId, HttpContext context, ApplicationDbContext db) =>
             {
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
 
-                // 1. Перевіряємо пристрій і чий він
+                // 1. РџРµСЂРµРІС–СЂСЏС”РјРѕ РїСЂРёСЃС‚СЂС–Р№ С– С‡РёР№ РІС–РЅ
                 var device = await db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.DeviceId == deviceId);
 
                 if (device == null)
-                    return Results.NotFound(new { message = "Пристрій не знайдено." });
+                    return Results.NotFound(new { message = "РџСЂРёСЃС‚СЂС–Р№ РЅРµ Р·РЅР°Р№РґРµРЅРѕ." });
 
-                // 2. Перевірка прав (Адмін або Власник)
+                // 2. РџРµСЂРµРІС–СЂРєР° РїСЂР°РІ (РђРґРјС–РЅ Р°Р±Рѕ Р’Р»Р°СЃРЅРёРє)
                 bool isAdmin = context.User.IsInRole("Admin");
                 bool isOwner = device.UserId == currentUserId;
 
                 if (!isAdmin && !isOwner)
-                    return Results.Json(new { error = "Ви не маєте доступу до сповіщень цього пристрою." }, statusCode: 403);
+                    return Results.Json(new { error = "Р’Рё РЅРµ РјР°С”С‚Рµ РґРѕСЃС‚СѓРїСѓ РґРѕ СЃРїРѕРІС–С‰РµРЅСЊ С†СЊРѕРіРѕ РїСЂРёСЃС‚СЂРѕСЋ." }, statusCode: 403);
 
-                // 3. Вибірка сповіщень
+                // 3. Р’РёР±С–СЂРєР° СЃРїРѕРІС–С‰РµРЅСЊ
                 var alerts = await db.Alerts
                     .AsNoTracking()
                     .Where(a => a.DeviceId == deviceId)
@@ -140,12 +140,12 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(alerts);
             });
 
-            // --- 5. ВИДАЛЕННЯ (Тільки Admin) ---
-            // Користувачі не можуть видаляти історію аварій, тільки адмін може чистити базу
+            // --- 5. Р’РР”РђР›Р•РќРќРЇ (РўС–Р»СЊРєРё Admin) ---
+            // РљРѕСЂРёСЃС‚СѓРІР°С‡С– РЅРµ РјРѕР¶СѓС‚СЊ РІРёРґР°Р»СЏС‚Рё С–СЃС‚РѕСЂС–СЋ Р°РІР°СЂС–Р№, С‚С–Р»СЊРєРё Р°РґРјС–РЅ РјРѕР¶Рµ С‡РёСЃС‚РёС‚Рё Р±Р°Р·Сѓ
             group.MapDelete("/{id}", async (int id, HttpContext context, ApplicationDbContext db) =>
             {
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Тільки адміністратор може видаляти сповіщення." }, statusCode: 403);
+                    return Results.Json(new { error = "РўС–Р»СЊРєРё Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ РјРѕР¶Рµ РІРёРґР°Р»СЏС‚Рё СЃРїРѕРІС–С‰РµРЅРЅСЏ." }, statusCode: 403);
 
                 var alert = await db.Alerts.FindAsync(id);
                 if (alert == null) return Results.NotFound();
@@ -153,7 +153,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 db.Alerts.Remove(alert);
                 await db.SaveChangesAsync();
 
-                return Results.Ok(new { message = "Сповіщення видалено." });
+                return Results.Ok(new { message = "РЎРїРѕРІС–С‰РµРЅРЅСЏ РІРёРґР°Р»РµРЅРѕ." });
             });
         }
     }

@@ -46,7 +46,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 await db.SaveChangesAsync();
 
                 // 4. Return Created (201)
-                return Results.Created($"/api/tariffs/{tariff.TariffId}",
+                return Results.Created($"/api/tariffs/{tariff.TariffId}", 
                     new TariffDto(tariff.TariffId, tariff.Name, tariff.PricePerUnit));
             });
 
