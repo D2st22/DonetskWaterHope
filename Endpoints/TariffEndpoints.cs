@@ -11,31 +11,31 @@ namespace ProjectsDonetskWaterHope.Endpoints
         {
             var group = app.MapGroup("/api/tariffs").RequireAuthorization();
 
-            // --- ОТРИМАННЯ ВСІХ ТАРИФІВ (GET) ---
-            // Доступно всім авторизованим (і адмінам, і юзерам, щоб знати ціни)
+            // --- РћРўР РРњРђРќРќРЇ Р’РЎР†РҐ РўРђР РР¤Р†Р’ (GET) ---
+            // Р”РѕСЃС‚СѓРїРЅРѕ РІСЃС–Рј Р°РІС‚РѕСЂРёР·РѕРІР°РЅРёРј (С– Р°РґРјС–РЅР°Рј, С– СЋР·РµСЂР°Рј, С‰РѕР± Р·РЅР°С‚Рё С†С–РЅРё)
             group.MapGet("/", async (ApplicationDbContext db) =>
             {
                 var tariffs = await db.Tariffs
-                    .AsNoTracking() // Оптимізація для читання (швидше)
+                    .AsNoTracking() // РћРїС‚РёРјС–Р·Р°С†С–СЏ РґР»СЏ С‡РёС‚Р°РЅРЅСЏ (С€РІРёРґС€Рµ)
                     .Select(t => new TariffDto(t.TariffId, t.Name, t.PricePerUnit))
                     .ToListAsync();
 
                 return Results.Ok(tariffs);
             });
 
-            // --- ДОДАВАННЯ ТАРИФУ (POST) ---
-            // Тільки Адмін
+            // --- Р”РћР”РђР’РђРќРќРЇ РўРђР РР¤РЈ (POST) ---
+            // РўС–Р»СЊРєРё РђРґРјС–РЅ
             group.MapPost("/", async (CreateTariffDto dto, ApplicationDbContext db, HttpContext context) =>
             {
-                // 1. Guard Clause: Права
+                // 1. Guard Clause: РџСЂР°РІР°
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Тільки адміністратор може створювати тарифи." }, statusCode: 403);
+                    return Results.Json(new { error = "РўС–Р»СЊРєРё Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ РјРѕР¶Рµ СЃС‚РІРѕСЂСЋРІР°С‚Рё С‚Р°СЂРёС„Рё." }, statusCode: 403);
 
-                // 2. Валідація: Чи є вже такий тариф?
+                // 2. Р’Р°Р»С–РґР°С†С–СЏ: Р§Рё С” РІР¶Рµ С‚Р°РєРёР№ С‚Р°СЂРёС„?
                 if (await db.Tariffs.AnyAsync(t => t.Name == dto.Name))
-                    return Results.BadRequest(new { error = $"Тариф з назвою '{dto.Name}' вже існує." });
+                    return Results.BadRequest(new { error = $"РўР°СЂРёС„ Р· РЅР°Р·РІРѕСЋ '{dto.Name}' РІР¶Рµ С–СЃРЅСѓС”." });
 
-                // 3. Створення
+                // 3. РЎС‚РІРѕСЂРµРЅРЅСЏ
                 var tariff = new Tariff
                 {
                     Name = dto.Name,
@@ -50,30 +50,30 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     new TariffDto(tariff.TariffId, tariff.Name, tariff.PricePerUnit));
             });
 
-            // --- ВИДАЛЕННЯ ТАРИФУ (DELETE) ---
-            // Тільки Адмін
+            // --- Р’РР”РђР›Р•РќРќРЇ РўРђР РР¤РЈ (DELETE) ---
+            // РўС–Р»СЊРєРё РђРґРјС–РЅ
             group.MapDelete("/{id}", async (int id, ApplicationDbContext db, HttpContext context) =>
             {
-                // 1. Guard Clause: Права
+                // 1. Guard Clause: РџСЂР°РІР°
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Тільки адміністратор може видаляти тарифи." }, statusCode: 403);
+                    return Results.Json(new { error = "РўС–Р»СЊРєРё Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ РјРѕР¶Рµ РІРёРґР°Р»СЏС‚Рё С‚Р°СЂРёС„Рё." }, statusCode: 403);
 
-                // 2. Пошук
+                // 2. РџРѕС€СѓРє
                 var tariff = await db.Tariffs.FindAsync(id);
                 if (tariff == null)
-                    return Results.NotFound(new { message = "Тариф не знайдено." });
+                    return Results.NotFound(new { message = "РўР°СЂРёС„ РЅРµ Р·РЅР°Р№РґРµРЅРѕ." });
 
-                // 3. Видалення з обробкою зв'язків
+                // 3. Р’РёРґР°Р»РµРЅРЅСЏ Р· РѕР±СЂРѕР±РєРѕСЋ Р·РІ'СЏР·РєС–РІ
                 try
                 {
                     db.Tariffs.Remove(tariff);
                     await db.SaveChangesAsync();
-                    return Results.Ok(new { message = $"Тариф '{tariff.Name}' успішно видалено." });
+                    return Results.Ok(new { message = $"РўР°СЂРёС„ '{tariff.Name}' СѓСЃРїС–С€РЅРѕ РІРёРґР°Р»РµРЅРѕ." });
                 }
                 catch (DbUpdateException)
                 {
-                    // Якщо до тарифу прив'язані лічильники (Devices), база не дасть видалити
-                    return Results.Conflict(new { error = "Неможливо видалити тариф: він використовується на існуючих лічильниках." });
+                    // РЇРєС‰Рѕ РґРѕ С‚Р°СЂРёС„Сѓ РїСЂРёРІ'СЏР·Р°РЅС– Р»С–С‡РёР»СЊРЅРёРєРё (Devices), Р±Р°Р·Р° РЅРµ РґР°СЃС‚СЊ РІРёРґР°Р»РёС‚Рё
+                    return Results.Conflict(new { error = "РќРµРјРѕР¶Р»РёРІРѕ РІРёРґР°Р»РёС‚Рё С‚Р°СЂРёС„: РІС–РЅ РІРёРєРѕСЂРёСЃС‚РѕРІСѓС”С‚СЊСЃСЏ РЅР° С–СЃРЅСѓСЋС‡РёС… Р»С–С‡РёР»СЊРЅРёРєР°С…." });
                 }
             });
         }

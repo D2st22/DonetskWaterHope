@@ -12,32 +12,32 @@ namespace ProjectsDonetskWaterHope.Endpoints
         {
             var group = app.MapGroup("/api/consumption").RequireAuthorization();
 
-            // --- 1. ВНЕСЕННЯ ПОКАЗНИКІВ (POST) ---
+            // --- 1. Р’РќР•РЎР•РќРќРЇ РџРћРљРђР—РќРРљР†Р’ (POST) ---
             group.MapPost("/", async (CreateConsumptionDto dto, ApplicationDbContext db, HttpContext context) =>
             {
-                // КРОК 1: Визначаємо, хто робить запит (отримуємо ID користувача з токена)
+                // РљР РћРљ 1: Р’РёР·РЅР°С‡Р°С”РјРѕ, С…С‚Рѕ СЂРѕР±РёС‚СЊ Р·Р°РїРёС‚ (РѕС‚СЂРёРјСѓС”РјРѕ ID РєРѕСЂРёСЃС‚СѓРІР°С‡Р° Р· С‚РѕРєРµРЅР°)
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
 
-                // КРОК 2: Знаходимо пристрій та його тариф
+                // РљР РћРљ 2: Р—РЅР°С…РѕРґРёРјРѕ РїСЂРёСЃС‚СЂС–Р№ С‚Р° Р№РѕРіРѕ С‚Р°СЂРёС„
                 var device = await db.Devices
                     .Include(d => d.Tariff)
                     .FirstOrDefaultAsync(d => d.DeviceId == dto.DeviceId);
 
                 if (device == null)
-                    return Results.BadRequest(new { error = "Пристрій не знайдено." });
+                    return Results.BadRequest(new { error = "РџСЂРёСЃС‚СЂС–Р№ РЅРµ Р·РЅР°Р№РґРµРЅРѕ." });
 
-                // КРОК 3: ПЕРЕВІРКА ПРАВ (Виправлено!)
-                // Дозволяємо, якщо це Адмін АБО якщо це Власник пристрою
+                // РљР РћРљ 3: РџР•Р Р•Р’Р†Р РљРђ РџР РђР’ (Р’РёРїСЂР°РІР»РµРЅРѕ!)
+                // Р”РѕР·РІРѕР»СЏС”РјРѕ, СЏРєС‰Рѕ С†Рµ РђРґРјС–РЅ РђР‘Рћ СЏРєС‰Рѕ С†Рµ Р’Р»Р°СЃРЅРёРє РїСЂРёСЃС‚СЂРѕСЋ
                 bool isAdmin = context.User.IsInRole("Admin");
                 bool isOwner = device.UserId == currentUserId;
 
                 if (!isAdmin && !isOwner)
                 {
-                    return Results.Json(new { error = "Ви не маєте прав вносити показники для цього пристрою." }, statusCode: 403);
+                    return Results.Json(new { error = "Р’Рё РЅРµ РјР°С”С‚Рµ РїСЂР°РІ РІРЅРѕСЃРёС‚Рё РїРѕРєР°Р·РЅРёРєРё РґР»СЏ С†СЊРѕРіРѕ РїСЂРёСЃС‚СЂРѕСЋ." }, statusCode: 403);
                 }
 
-                // КРОК 4: Знаходимо ОСТАННІЙ запис цього пристрою
+                // РљР РћРљ 4: Р—РЅР°С…РѕРґРёРјРѕ РћРЎРўРђРќРќР†Р™ Р·Р°РїРёСЃ С†СЊРѕРіРѕ РїСЂРёСЃС‚СЂРѕСЋ
                 var lastRecord = await db.ConsumptionRecords
                      .Where(r => r.DeviceId == dto.DeviceId)
                      .OrderByDescending(r => r.CreatedAt)
@@ -48,16 +48,16 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
                 if (lastRecord != null)
                 {
-                    // Це не перший запис, рахуємо різницю як зазвичай
+                    // Р¦Рµ РЅРµ РїРµСЂС€РёР№ Р·Р°РїРёСЃ, СЂР°С…СѓС”РјРѕ СЂС–Р·РЅРёС†СЋ СЏРє Р·Р°Р·РІРёС‡Р°Р№
                     int previousValue = lastRecord.Value;
                     delta = dto.CurrentValue - previousValue;
 
-                    // Валідація
+                    // Р’Р°Р»С–РґР°С†С–СЏ
                     if (delta < 0)
                     {
                         return Results.BadRequest(new
                         {
-                            error = $"Новий показник ({dto.CurrentValue}) не може бути меншим за попередній ({previousValue})."
+                            error = $"РќРѕРІРёР№ РїРѕРєР°Р·РЅРёРє ({dto.CurrentValue}) РЅРµ РјРѕР¶Рµ Р±СѓС‚Рё РјРµРЅС€РёРј Р·Р° РїРѕРїРµСЂРµРґРЅС–Р№ ({previousValue})."
                         });
                     }
 
@@ -65,9 +65,9 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 }
                 else
                 {
-                    // --- ЛОГІКА ПЕРШОГО ЗАПУСКУ ---
-                    // Якщо записів ще немає, ми просто фіксуємо поточний показник як "стартовий".
-                    // Клієнт нічого не платить за "старі" цифри на лічильнику.
+                    // --- Р›РћР“Р†РљРђ РџР•Р РЁРћР“Рћ Р—РђРџРЈРЎРљРЈ ---
+                    // РЇРєС‰Рѕ Р·Р°РїРёСЃС–РІ С‰Рµ РЅРµРјР°С”, РјРё РїСЂРѕСЃС‚Рѕ С„С–РєСЃСѓС”РјРѕ РїРѕС‚РѕС‡РЅРёР№ РїРѕРєР°Р·РЅРёРє СЏРє "СЃС‚Р°СЂС‚РѕРІРёР№".
+                    // РљР»С–С”РЅС‚ РЅС–С‡РѕРіРѕ РЅРµ РїР»Р°С‚РёС‚СЊ Р·Р° "СЃС‚Р°СЂС–" С†РёС„СЂРё РЅР° Р»С–С‡РёР»СЊРЅРёРєСѓ.
                     delta = 0;
                     cost = 0;
                 }
@@ -76,8 +76,8 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 {
                     DeviceId = dto.DeviceId,
                     Value = dto.CurrentValue,
-                    Delta = delta,      // Буде 0 для першого запису
-                    MustToPay = cost,   // Буде 0.00 для першого запису
+                    Delta = delta,      // Р‘СѓРґРµ 0 РґР»СЏ РїРµСЂС€РѕРіРѕ Р·Р°РїРёСЃСѓ
+                    MustToPay = cost,   // Р‘СѓРґРµ 0.00 РґР»СЏ РїРµСЂС€РѕРіРѕ Р·Р°РїРёСЃСѓ
                     CreatedAt = DateTime.UtcNow,
                     TariffId = device.TariffId
                 };
@@ -87,19 +87,19 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
                 return Results.Created($"/api/consumption/{record.ConsumptionRecordId}", new
                 {
-                    message = "Показники внесено успішно",
+                    message = "РџРѕРєР°Р·РЅРёРєРё РІРЅРµСЃРµРЅРѕ СѓСЃРїС–С€РЅРѕ",
                     delta = delta,
                     toPay = cost
                 });
             });
 
-            // --- 2. ІСТОРІЯ ПОКАЗНИКІВ КОНКРЕТНОГО ПРИСТРОЮ (GET) ---
+            // --- 2. Р†РЎРўРћР Р†РЇ РџРћРљРђР—РќРРљР†Р’ РљРћРќРљР Р•РўРќРћР“Рћ РџР РРЎРўР РћР® (GET) ---
             group.MapGet("/device/{deviceId}", async (int deviceId, HttpContext context, ApplicationDbContext db) =>
             {
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
 
-                // Перевірка прав доступу до девайсу
+                // РџРµСЂРµРІС–СЂРєР° РїСЂР°РІ РґРѕСЃС‚СѓРїСѓ РґРѕ РґРµРІР°Р№СЃСѓ
                 var device = await db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.DeviceId == deviceId);
                 if (device == null) return Results.NotFound();
 
@@ -107,9 +107,9 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 bool isOwner = device.UserId == currentUserId;
 
                 if (!isAdmin && !isOwner)
-                    return Results.Json(new { error = "Це не ваш пристрій." }, statusCode: 403);
+                    return Results.Json(new { error = "Р¦Рµ РЅРµ РІР°С€ РїСЂРёСЃС‚СЂС–Р№." }, statusCode: 403);
 
-                // Вибірка історії
+                // Р’РёР±С–СЂРєР° С–СЃС‚РѕСЂС–С—
                 var records = await db.ConsumptionRecords
                     .AsNoTracking()
                     .Where(r => r.DeviceId == deviceId)
@@ -131,7 +131,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(records);
             });
 
-            // --- 3. МОЯ ЗАГАЛЬНА ІСТОРІЯ (Всі пристрої юзера) ---
+            // --- 3. РњРћРЇ Р—РђР“РђР›Р¬РќРђ Р†РЎРўРћР Р†РЇ (Р’СЃС– РїСЂРёСЃС‚СЂРѕС— СЋР·РµСЂР°) ---
             group.MapGet("/my", async (HttpContext context, ApplicationDbContext db) =>
             {
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
@@ -158,11 +158,11 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(records);
             });
 
-            // --- 4. ВИДАЛЕННЯ ЗАПИСУ (Тільки Admin) ---
+            // --- 4. Р’РР”РђР›Р•РќРќРЇ Р—РђРџРРЎРЈ (РўС–Р»СЊРєРё Admin) ---
             group.MapDelete("/{id}", async (int id, HttpContext context, ApplicationDbContext db) =>
             {
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Тільки адміністратор може видаляти фінансові записи." }, statusCode: 403);
+                    return Results.Json(new { error = "РўС–Р»СЊРєРё Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ РјРѕР¶Рµ РІРёРґР°Р»СЏС‚Рё С„С–РЅР°РЅСЃРѕРІС– Р·Р°РїРёСЃРё." }, statusCode: 403);
 
                 var record = await db.ConsumptionRecords.FindAsync(id);
                 if (record == null) return Results.NotFound();
@@ -170,7 +170,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 db.ConsumptionRecords.Remove(record);
                 await db.SaveChangesAsync();
 
-                return Results.Ok(new { message = "Запис про споживання видалено." });
+                return Results.Ok(new { message = "Р—Р°РїРёСЃ РїСЂРѕ СЃРїРѕР¶РёРІР°РЅРЅСЏ РІРёРґР°Р»РµРЅРѕ." });
             });
         }
     }

@@ -13,7 +13,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
         {
             var group = app.MapGroup("/api/devices").RequireAuthorization();
 
-            // --- 1. ОТРИМАННЯ МОЇХ ПРИСТРОЇВ (User) ---
+            // --- 1. РћРўР РРњРђРќРќРЇ РњРћР‡РҐ РџР РРЎРўР РћР‡Р’ (User) ---
             group.MapGet("/my", async (HttpContext context, ApplicationDbContext db) =>
             {
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
@@ -24,7 +24,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     .Where(d => d.UserId == currentUserId)
                     .Include(d => d.Tariff)
                     .Include(d => d.User)
-                    .Include(d => d.RegisteredByUser) // Нова назва
+                    .Include(d => d.RegisteredByUser) // РќРѕРІР° РЅР°Р·РІР°
                     .Select(d => new DeviceDto(
                         d.DeviceId,
                         d.SerialNumber,
@@ -32,7 +32,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                         d.Type,
                         d.Status,
                         d.RegistrationAt,
-                        // Уважно слідкуємо за порядком в DTO:
+                        // РЈРІР°Р¶РЅРѕ СЃР»С–РґРєСѓС”РјРѕ Р·Р° РїРѕСЂСЏРґРєРѕРј РІ DTO:
                         d.User.AccountNumber,                                // AccountNumber
                         d.RegisteredByUser != null ? d.RegisteredByUser.AccountNumber : null, // RegisteredByAdmin
                         d.Comment,                                           // Comment
@@ -45,11 +45,11 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(devices);
             });
 
-            // --- 2. ОТРИМАННЯ ВСІХ ПРИСТРОЇВ (Admin) ---
+            // --- 2. РћРўР РРњРђРќРќРЇ Р’РЎР†РҐ РџР РРЎРўР РћР‡Р’ (Admin) ---
             group.MapGet("/", async (HttpContext context, ApplicationDbContext db) =>
             {
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Доступ заборонено." }, statusCode: 403);
+                    return Results.Json(new { error = "Р”РѕСЃС‚СѓРї Р·Р°Р±РѕСЂРѕРЅРµРЅРѕ." }, statusCode: 403);
 
                 var devices = await db.Devices
                     .AsNoTracking()
@@ -64,7 +64,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                         d.Status,
                         d.RegistrationAt,
                         d.User.AccountNumber,
-                        d.RegisteredByUser != null ? d.RegisteredByUser.AccountNumber : "Невідомо",
+                        d.RegisteredByUser != null ? d.RegisteredByUser.AccountNumber : "РќРµРІС–РґРѕРјРѕ",
                         d.Comment,
                         d.Tariff.Name,
                         d.Tariff.PricePerUnit,
@@ -75,7 +75,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 return Results.Ok(devices);
             });
 
-            // --- 3. ОТРИМАННЯ ПО ID ---
+            // --- 3. РћРўР РРњРђРќРќРЇ РџРћ ID ---
             group.MapGet("/{id}", async (int id, HttpContext context, ApplicationDbContext db) =>
             {
                 var device = await db.Devices
@@ -84,7 +84,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     .Include(d => d.RegisteredByUser)
                     .FirstOrDefaultAsync(d => d.DeviceId == id);
 
-                if (device == null) return Results.NotFound(new { message = "Пристрій не знайдено" });
+                if (device == null) return Results.NotFound(new { message = "РџСЂРёСЃС‚СЂС–Р№ РЅРµ Р·РЅР°Р№РґРµРЅРѕ" });
 
                 var userIdStr = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 bool isAdmin = context.User.IsInRole("Admin");
@@ -108,24 +108,24 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 ));
             });
 
-            // --- 4. ДОДАННЯ ПРИСТРОЮ (Admin) ---
+            // --- 4. Р”РћР”РђРќРќРЇ РџР РРЎРўР РћР® (Admin) ---
             group.MapPost("/", async (CreateDeviceDto dto, ApplicationDbContext db, HttpContext context, LoggerService logger) =>
             {
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Тільки адміністратор може реєструвати пристрої." }, statusCode: 403);
+                    return Results.Json(new { error = "РўС–Р»СЊРєРё Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ РјРѕР¶Рµ СЂРµС”СЃС‚СЂСѓРІР°С‚Рё РїСЂРёСЃС‚СЂРѕС—." }, statusCode: 403);
 
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int adminId))
                     return Results.Unauthorized();
 
-                // Валідації
+                // Р’Р°Р»С–РґР°С†С–С—
                 if (!await db.Users.AnyAsync(u => u.UserId == dto.UserId))
-                    return Results.BadRequest(new { error = "Вказаного користувача не існує." });
+                    return Results.BadRequest(new { error = "Р’РєР°Р·Р°РЅРѕРіРѕ РєРѕСЂРёСЃС‚СѓРІР°С‡Р° РЅРµ С–СЃРЅСѓС”." });
 
                 if (!await db.Tariffs.AnyAsync(t => t.TariffId == dto.TariffId))
-                    return Results.BadRequest(new { error = "Вказаного тарифу не існує." });
+                    return Results.BadRequest(new { error = "Р’РєР°Р·Р°РЅРѕРіРѕ С‚Р°СЂРёС„Сѓ РЅРµ С–СЃРЅСѓС”." });
 
                 if (await db.Devices.AnyAsync(d => d.SerialNumber == dto.SerialNumber))
-                    return Results.BadRequest(new { error = "Пристрій з таким серійним номером вже зареєстровано." });
+                    return Results.BadRequest(new { error = "РџСЂРёСЃС‚СЂС–Р№ Р· С‚Р°РєРёРј СЃРµСЂС–Р№РЅРёРј РЅРѕРјРµСЂРѕРј РІР¶Рµ Р·Р°СЂРµС”СЃС‚СЂРѕРІР°РЅРѕ." });
 
                 var device = new Device
                 {
@@ -134,7 +134,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     Type = dto.Type,
                     Status = "Active",
                     RegistrationAt = DateTime.UtcNow,
-                    RegisteredByUserId = adminId, // Використовуємо нове ім'я властивості
+                    RegisteredByUserId = adminId, // Р’РёРєРѕСЂРёСЃС‚РѕРІСѓС”РјРѕ РЅРѕРІРµ С–Рј'СЏ РІР»Р°СЃС‚РёРІРѕСЃС‚С–
                     TariffId = dto.TariffId,
                     UserId = dto.UserId,
                     Comment = dto.Comment
@@ -142,10 +142,10 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
                 db.Devices.Add(device);
                 await db.SaveChangesAsync();
-                // ЛОГУВАННЯ
-                await logger.LogAsync("DeviceAdded", $"Додано пристрій {device.SerialNumber}", device.UserId, device.DeviceId);
+                // Р›РћР“РЈР’РђРќРќРЇ
+                await logger.LogAsync("DeviceAdded", $"Р”РѕРґР°РЅРѕ РїСЂРёСЃС‚СЂС–Р№ {device.SerialNumber}", device.UserId, device.DeviceId);
 
-                // Підвантажуємо для відповіді
+                // РџС–РґРІР°РЅС‚Р°Р¶СѓС”РјРѕ РґР»СЏ РІС–РґРїРѕРІС–РґС–
                 await db.Entry(device).Reference(d => d.Tariff).LoadAsync();
                 await db.Entry(device).Reference(d => d.User).LoadAsync();
                 await db.Entry(device).Reference(d => d.RegisteredByUser).LoadAsync();
@@ -166,18 +166,18 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 ));
             });
 
-            // --- 5. ОНОВЛЕННЯ (Admin) ---
+            // --- 5. РћРќРћР’Р›Р•РќРќРЇ (Admin) ---
             group.MapPatch("/{id}", async (int id, UpdateDeviceAdminDto dto, ApplicationDbContext db, HttpContext context) =>
             {
                 if (!context.User.IsInRole("Admin"))
-                    return Results.Json(new { error = "Тільки адміністратор може змінювати параметри пристрою." }, statusCode: 403);
+                    return Results.Json(new { error = "РўС–Р»СЊРєРё Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ РјРѕР¶Рµ Р·РјС–РЅСЋРІР°С‚Рё РїР°СЂР°РјРµС‚СЂРё РїСЂРёСЃС‚СЂРѕСЋ." }, statusCode: 403);
 
                 var device = await db.Devices
                     .Include(d => d.User)
-                    .Include(d => d.RegisteredByUser) // Нова назва
+                    .Include(d => d.RegisteredByUser) // РќРѕРІР° РЅР°Р·РІР°
                     .FirstOrDefaultAsync(d => d.DeviceId == id);
 
-                if (device == null) return Results.NotFound(new { message = "Пристрій не знайдено" });
+                if (device == null) return Results.NotFound(new { message = "РџСЂРёСЃС‚СЂС–Р№ РЅРµ Р·РЅР°Р№РґРµРЅРѕ" });
 
                 if (!string.IsNullOrWhiteSpace(dto.Name)) device.Name = dto.Name;
                 if (!string.IsNullOrWhiteSpace(dto.Status)) device.Status = dto.Status;
@@ -186,7 +186,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 if (dto.TariffId.HasValue)
                 {
                     if (!await db.Tariffs.AnyAsync(t => t.TariffId == dto.TariffId))
-                        return Results.BadRequest(new { error = "Нового тарифу не існує." });
+                        return Results.BadRequest(new { error = "РќРѕРІРѕРіРѕ С‚Р°СЂРёС„Сѓ РЅРµ С–СЃРЅСѓС”." });
                     device.TariffId = dto.TariffId.Value;
                 }
 
