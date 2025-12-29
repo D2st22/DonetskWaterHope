@@ -14,42 +14,69 @@ namespace ProjectsDonetskWaterHope.Endpoints
         public static void MapUserEndpoints(this WebApplication app)
         {
             // --- РЕЄСТРАЦІЯ ---
-            app.MapPost("/api/auth/register", async (ApplicationDbContext db, RegisterUserDto dto, LoggerService logger) =>
+            app.MapPost("/api/auth/register", async (
+     ApplicationDbContext db,
+     RegisterUserDto dto,
+     LoggerService logger) =>
             {
+                if (string.IsNullOrWhiteSpace(dto.Email))
+                    return Results.BadRequest(new { error = "Email обовʼязковий" });
+
+                var normalizedEmail = dto.Email.ToLower().Trim();
+
                 // 1. Валідація Email
-                if (!IsValidEmail(dto.Email))
+                if (!IsValidEmail(normalizedEmail))
                     return Results.BadRequest(new { error = "Некоректний формат Email" });
 
-                // 2. Валідація телефону за допомогою UkrainianPhoneAttribute
+                // 2. Перевірка унікальності Email
+                if (await db.Users.AnyAsync(u => u.Email == normalizedEmail))
+                    return Results.BadRequest(new { error = "Користувач з таким Email вже існує" });
+
+                // 3. Валідація телефону
                 var phoneAttr = new UkrainianPhoneAttribute();
                 if (!phoneAttr.IsValid(dto.PhoneNumber))
                     return Results.BadRequest(new { error = "Некоректний формат українського номера телефону" });
 
-                // 3. Перевірка на унікальність
-                if (await db.Users.AnyAsync(u => u.Email == dto.Email))
-                    return Results.BadRequest(new { error = "Користувач з таким Email вже існує" });
-
-                // 4. Нормалізація телефону перед записом в базу
-                string normalizedPhone = UkrainianPhoneAttribute.NormalizePhone(dto.PhoneNumber);
-                string newAccountNumber = await GenerateUniqueAccountNumber(db);
+                var normalizedPhone = UkrainianPhoneAttribute.NormalizePhone(dto.PhoneNumber);
+                var newAccountNumber = await GenerateUniqueAccountNumber(db);
 
                 var user = new User
                 {
                     AccountNumber = newAccountNumber,
                     FirstName = dto.FirstName,
                     LastName = dto.LastName,
-                    Email = dto.Email.ToLower().Trim(),
+                    Email = normalizedEmail,
                     PhoneNumber = normalizedPhone,
                     PasswordHash = PasswordHasher.HashPassword(dto.Password),
                     Role = "User"
                 };
 
                 db.Users.Add(user);
-                await db.SaveChangesAsync();
 
-                await logger.LogAsync("UserRegistered", $"Новий користувач: {user.FirstName} ({user.AccountNumber})", user.UserId);
+                try
+                {
+                    await db.SaveChangesAsync();
+                }
+                catch (DbUpdateException)
+                {
+                    return Results.Conflict(new { error = "Користувач з таким Email вже існує" });
+                }
 
-                return Results.Ok(new UserDto(user.UserId, user.AccountNumber, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Role));
+                await logger.LogAsync(
+                    "UserRegistered",
+                    $"Новий користувач: {user.FirstName} ({user.AccountNumber})",
+                    user.UserId
+                );
+
+                return Results.Ok(new UserDto(
+                    user.UserId,
+                    user.AccountNumber,
+                    user.FirstName,
+                    user.LastName,
+                    user.Email,
+                    user.PhoneNumber,
+                    user.Role
+                ));
             });
 
             // --- ЛОГІН ---
@@ -86,25 +113,35 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     : Results.NotFound(new { message = "Користувача не знайдено" });
             }).RequireAuthorization();
 
-            // --- ЗМІНА ДАНИХ (PATCH) ---
-            app.MapPatch("/api/users/{id}", async (int id, UpdateUserDto dto, HttpContext context, ApplicationDbContext db) =>
+            app.MapPatch("/api/users/{id}", async (
+                int id,
+                UpdateUserDto dto,
+                HttpContext context,
+                ApplicationDbContext db) =>
             {
-                if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
+                if (!int.TryParse(
+                    context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+                    out int currentUserId))
                     return Results.Unauthorized();
 
                 bool isAdmin = context.User.IsInRole("Admin");
                 bool isSelf = currentUserId == id;
 
                 if (!isSelf && !isAdmin)
-                    return Results.Json(new { error = "Недостатньо прав для редагування цього профілю" }, statusCode: 403);
+                    return Results.Forbid();
 
                 var user = await db.Users.FindAsync(id);
-                if (user == null) return Results.NotFound();
+                if (user == null)
+                    return Results.NotFound();
 
-                if (!string.IsNullOrWhiteSpace(dto.FirstName)) user.FirstName = dto.FirstName;
-                if (!string.IsNullOrWhiteSpace(dto.LastName)) user.LastName = dto.LastName;
+                // --- ІМʼЯ / ПРІЗВИЩЕ ---
+                if (!string.IsNullOrWhiteSpace(dto.FirstName))
+                    user.FirstName = dto.FirstName;
 
-                // Валідація телефону при оновленні
+                if (!string.IsNullOrWhiteSpace(dto.LastName))
+                    user.LastName = dto.LastName;
+
+                // --- ТЕЛЕФОН ---
                 if (!string.IsNullOrWhiteSpace(dto.PhoneNumber))
                 {
                     var phoneAttr = new UkrainianPhoneAttribute();
@@ -114,28 +151,48 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     user.PhoneNumber = UkrainianPhoneAttribute.NormalizePhone(dto.PhoneNumber);
                 }
 
-                if (isAdmin)
+                // --- EMAIL ---
+                if (!string.IsNullOrWhiteSpace(dto.Email))
                 {
-                    if (!string.IsNullOrWhiteSpace(dto.Role)) user.Role = dto.Role;
+                    var normalizedEmail = dto.Email.ToLower().Trim();
 
-                    if (!string.IsNullOrWhiteSpace(dto.Email) && dto.Email != user.Email)
+                    if (!IsValidEmail(normalizedEmail))
+                        return Results.BadRequest(new { error = "Некоректний формат Email" });
+
+                    if (normalizedEmail != user.Email)
                     {
-                        if (!IsValidEmail(dto.Email))
-                            return Results.BadRequest(new { error = "Некоректний формат нового Email" });
+                        if (await db.Users.AnyAsync(u =>
+                                u.Email == normalizedEmail && u.UserId != id))
+                            return Results.BadRequest(new { error = "Email вже зайнятий" });
 
-                        if (await db.Users.AnyAsync(u => u.Email == dto.Email && u.UserId != id))
-                            return Results.BadRequest(new { error = "Email вже зайнятий іншим користувачем" });
-
-                        user.Email = dto.Email.ToLower().Trim();
+                        user.Email = normalizedEmail;
                     }
                 }
 
-                await db.SaveChangesAsync();
+                // --- ROLE (ТІЛЬКИ ADMIN) ---
+                if (isAdmin && !string.IsNullOrWhiteSpace(dto.Role))
+                    user.Role = dto.Role;
+
+                try
+                {
+                    await db.SaveChangesAsync();
+                }
+                catch (DbUpdateException)
+                {
+                    return Results.Conflict(new { error = "Конфлікт даних (можливо Email вже існує)" });
+                }
 
                 return Results.Ok(new UserDto(
-                    user.UserId, user.AccountNumber, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Role
+                    user.UserId,
+                    user.AccountNumber,
+                    user.FirstName,
+                    user.LastName,
+                    user.Email,
+                    user.PhoneNumber,
+                    user.Role
                 ));
-            }).RequireAuthorization();
+            })
+            .RequireAuthorization();
 
             // --- ОТРИМАННЯ ВСІХ (Тільки Admin) ---
             app.MapGet("/api/users", async (HttpContext context, ApplicationDbContext db) =>

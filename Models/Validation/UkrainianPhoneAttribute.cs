@@ -1,37 +1,42 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
 
 namespace ProjectsDonetskWaterHope.Validation
 {
     public class UkrainianPhoneAttribute : ValidationAttribute
     {
+        // +380XXXXXXXXX або 0XXXXXXXXX
+        private static readonly Regex ValidPhoneRegex =
+            new(@"^(?:\+380\d{9}|0\d{9})$", RegexOptions.Compiled);
+
         public override bool IsValid(object? value)
         {
-            if (value == null) return true;
+            if (value == null)
+                return true; // null допустимий для PATCH
 
-            var phone = value.ToString()!;
-            var cleanPhone = System.Text.RegularExpressions.Regex.Replace(phone, @"[\s\-\(\)]", "");
+            var phone = value.ToString()!.Trim();
 
-            return cleanPhone switch
-            {
-                string p when p.StartsWith("+380") && p.Length == 13 => true,
-                string p when p.StartsWith("380") && p.Length == 12 => true,
-                string p when p.StartsWith("0") && p.Length == 10 => true,
-                _ => false
-            };
+            // залишаємо ТІЛЬКИ цифри та +
+            phone = Regex.Replace(phone, @"[^\d+]", "");
+
+            return ValidPhoneRegex.IsMatch(phone);
         }
 
         public static string NormalizePhone(string phone)
         {
-            if (string.IsNullOrEmpty(phone)) return phone;
+            if (string.IsNullOrWhiteSpace(phone))
+                return phone;
 
-            var cleanPhone = System.Text.RegularExpressions.Regex.Replace(phone, @"[^\d]", "");
+            phone = Regex.Replace(phone, @"[^\d+]", "");
 
-            if (cleanPhone.StartsWith("380") && cleanPhone.Length == 12)
-                return "+" + cleanPhone;
-            else if (cleanPhone.StartsWith("0") && cleanPhone.Length == 10)
-                return "+38" + cleanPhone;
-            else
-                return "+" + cleanPhone;
+            if (phone.StartsWith("0"))
+                return "+38" + phone;
+
+            if (phone.StartsWith("+380"))
+                return phone;
+
+            // сюди дійде тільки якщо валідатор не викликали
+            throw new ValidationException("Некоректний номер телефону");
         }
     }
 }

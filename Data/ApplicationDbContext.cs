@@ -93,6 +93,9 @@ namespace ProjectsDonetskWaterHope.Data
             modelBuilder.Entity<ConsumptionRecord>()
                 .Property(cr => cr.MustToPay)
                 .HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<User>()
+    .HasIndex(u => u.Email)
+    .IsUnique();
         }
     }
 }
