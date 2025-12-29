@@ -57,19 +57,32 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 if (!context.User.IsInRole("Admin"))
                     return Results.Json(new { error = "Доступ заборонено. Потрібні права адміністратора." }, statusCode: 403);
 
-                var tickets = await db.SupportTickets
-                    .AsNoTracking()
-                    .Include(t => t.User)
-                    .Include(t => t.Device)
-                    .Select(t => new SupportTicketDto(
-                        t.SupportTicketId, t.Subject, t.MessageText, t.Status, t.CreatedAt, t.Comment,
-                        t.Device != null ? t.Device.SerialNumber : null,
-                        t.User.AccountNumber
-                    ))
-                    .OrderByDescending(t => t.CreatedAt)
-                    .ToListAsync();
+                try
+                {
+                    var tickets = await db.SupportTickets
+                        .AsNoTracking()
+                        .Include(t => t.User)   // Обов'язково для AccountNumber
+                        .Include(t => t.Device) // Обов'язково для SerialNumber
+                        .OrderByDescending(t => t.CreatedAt)
+                        .Select(t => new SupportTicketDto(
+                            t.SupportTicketId,                                // 1. TicketId
+                            t.Subject,                                        // 2. Subject
+                            t.MessageText,                                    // 3. MessageText
+                            t.Status,                                         // 4. Status
+                            t.CreatedAt,                                      // 5. CreatedAt
+                            t.Comment,                                        // 6. AdminComment
+                            t.Device != null ? t.Device.SerialNumber : null,  // 7. DeviceSerialNumber
+                            t.User != null ? t.User.AccountNumber : "Система" // 8. UserAccountNumber
+                        ))
+                        .ToListAsync();
 
-                return Results.Ok(tickets);
+                    return Results.Ok(tickets);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Admin Error 500]: {ex.Message}");
+                    return Results.Problem("Помилка БД при завантаженні всіх звернень.");
+                }
             });
 
             // --- 3. ОТРИМАННЯ "МОЇХ" ТІКЕТІВ (Залогінений юзер) ---
