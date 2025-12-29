@@ -97,7 +97,19 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     )
                 ));
             });
+            app.MapGet("/api/users/{id}", async (int id, ApplicationDbContext db) =>
+            {
+                var userDto = await db.Users
+                    .Where(u => u.UserId == id)
+                    .Select(u => new UserDto(
+                        u.UserId, u.AccountNumber, u.FirstName, u.LastName, u.Email, u.PhoneNumber, u.Role
+                    ))
+                    .FirstOrDefaultAsync();
 
+                return userDto is not null
+                    ? Results.Ok(userDto)
+                    : Results.NotFound(new { message = "Користувача не знайдено" });
+            }).RequireAuthorization();
             // --- ОТРИМАННЯ ПРОФІЛЮ ---
             app.MapPatch("/api/users/{id}", async (
                 int id,
