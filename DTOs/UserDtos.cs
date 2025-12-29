@@ -10,13 +10,11 @@ namespace ProjectsDonetskWaterHope.DTOs
         string? PhoneNumber
     );
 
-    // ÇÌ²ÍÀ ÒÓÒ: Âõ³ä ò³ëüêè çà AccountNumber
     public record LoginDto(
         [Required] string AccountNumber,
         [Required] string Password
     );
 
-    // ÇÌ²ÍÀ ÒÓÒ: Äîäàëè AccountNumber ó âèâ³ä
     public record UserDto(
         int UserId,
         string AccountNumber,

@@ -10,7 +10,6 @@ namespace ProjectsDonetskWaterHope.Data
         {
         }
 
-        // Реєстрація таблиць
         public DbSet<User> Users { get; set; }
         public DbSet<Device> Devices { get; set; }
         public DbSet<ConsumptionRecord> ConsumptionRecords { get; set; }
@@ -23,72 +22,61 @@ namespace ProjectsDonetskWaterHope.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // --- 1. Налаштування Користувача та Пристроїв ---
             modelBuilder.Entity<Device>()
                 .HasOne(d => d.User)
-                .WithMany(u => u.Devices) // Використовуємо ICollection з моделі User
+                .WithMany(u => u.Devices) 
                 .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.Cascade); // Якщо видалити юзера -> видаляються всі його пристрої
+                .OnDelete(DeleteBehavior.Cascade); 
 
-            // --- 2. Налаштування Тарифів (Важливо для фінансів) ---
-            // Тариф для пристрою (поточний)
             modelBuilder.Entity<Device>()
                 .HasOne(d => d.Tariff)
-                .WithMany() // У Тарифа може не бути списку "поточних пристроїв", це не обов'язково
+                .WithMany() 
                 .HasForeignKey(d => d.TariffId)
-                .OnDelete(DeleteBehavior.Restrict); // Не можна видалити тариф, якщо він встановлений на пристрої
+                .OnDelete(DeleteBehavior.Restrict); 
             modelBuilder.Entity<Device>()
-        .HasOne(d => d.RegisteredByUser)       // Використовуємо нову назву властивості
+        .HasOne(d => d.RegisteredByUser)     
         .WithMany()
-        .HasForeignKey(d => d.RegisteredByUserId) // Використовуємо нову назву FK
+        .HasForeignKey(d => d.RegisteredByUserId) 
         .OnDelete(DeleteBehavior.Restrict);
 
-
-            // Тариф в історії споживання (архівний)
             modelBuilder.Entity<ConsumptionRecord>()
                 .HasOne(cr => cr.Tariff)
                 .WithMany()
                 .HasForeignKey(cr => cr.TariffId)
-                .OnDelete(DeleteBehavior.Restrict); // КРИТИЧНО: Не можна видалити тариф, якщо по ньому є записи в історії
+                .OnDelete(DeleteBehavior.Restrict); 
 
-            // --- 3. Споживання та Пристрої ---
             modelBuilder.Entity<ConsumptionRecord>()
                 .HasOne(cr => cr.Device)
-                .WithMany(d => d.ConsumptionRecords) // Зв'язок з ICollection в Device
+                .WithMany(d => d.ConsumptionRecords) 
                 .HasForeignKey(cr => cr.DeviceId)
-                .OnDelete(DeleteBehavior.Cascade); // Видалення пристрою очищає його історію
+                .OnDelete(DeleteBehavior.Cascade); 
 
-            // --- 4. Технічна підтримка (SupportTickets) ---
             modelBuilder.Entity<SupportTicket>()
                 .HasOne(st => st.User)
-                .WithMany(u => u.SupportTickets) // Зв'язок з ICollection в User
+                .WithMany(u => u.SupportTickets) 
                 .HasForeignKey(st => st.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<SupportTicket>()
                 .HasOne(st => st.Device)
-                .WithMany() // У Device немає списку тікетів (або є, якщо ви додали ICollection<SupportTicket>)
+                .WithMany() 
                 .HasForeignKey(st => st.DeviceId)
-                .IsRequired(false) // Тікет може бути без пристрою (загальне питання)
-                .OnDelete(DeleteBehavior.SetNull); // Якщо пристрій видалять, тікет залишиться, але поле DeviceId стане null
+                .IsRequired(false) 
+                .OnDelete(DeleteBehavior.SetNull); 
 
-            // --- 5. Сповіщення (Alerts) ---
             modelBuilder.Entity<Alert>()
                 .HasOne(a => a.Device)
-                .WithMany(d => d.Alerts) // Зв'язок з ICollection в Device
+                .WithMany(d => d.Alerts) 
                 .HasForeignKey(a => a.DeviceId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // --- 6. Унікальні ключі та обмеження ---
-            // Серійний номер пристрою має бути унікальним у всій базі
             modelBuilder.Entity<Device>()
                 .HasIndex(d => d.SerialNumber)
                 .IsUnique();
 
-            // Налаштування точності для грошей (PostgreSQL numeric)
             modelBuilder.Entity<Tariff>()
                 .Property(t => t.PricePerUnit)
-                .HasColumnType("decimal(18,2)"); // 18 цифр всього, 2 після коми
+                .HasColumnType("decimal(18,2)"); 
 
             modelBuilder.Entity<ConsumptionRecord>()
                 .Property(cr => cr.MustToPay)

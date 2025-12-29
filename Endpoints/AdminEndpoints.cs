@@ -11,18 +11,17 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
             group.MapGet("/", async (ApplicationDbContext db, HttpContext context) =>
             {
-                // Тільки Адмін має доступ
                 if (!context.User.IsInRole("Admin"))
                     return Results.Json(new { error = "Доступ заборонено" }, statusCode: 403);
 
                 var logs = await db.SystemLogs
                     .AsNoTracking()
-                    .OrderByDescending(l => l.CreatedAt) // Спочатку нові
-                    .Take(100) // Беремо останні 100 подій
+                    .OrderByDescending(l => l.CreatedAt) 
+                    .Take(100) 
                     .ToListAsync();
 
                 return Results.Ok(logs);
-            });
+            }).WithTags("Admin");
         }
     }
 }

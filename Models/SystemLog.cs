@@ -8,8 +8,6 @@ namespace ProjectsDonetskWaterHope.Models
         [Key]
         public int LogId { get; set; }
 
-        // Додано модифікатор 'required'. 
-        // Тепер не можна створити лог без вказання типу та повідомлення.
         public required string EventType { get; set; } = null!;
         public required string Message { get; set; }  = null!;
 

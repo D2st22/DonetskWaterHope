@@ -3,32 +3,27 @@ using System.Text.Json.Serialization;
 using Microsoft.OpenApi.Models;
 using ProjectsDonetskWaterHope.Data;
 using ProjectsDonetskWaterHope.Models;
-using ProjectsDonetskWaterHope.Services; // Для TokenService та EmailQueue
-using ProjectsDonetskWaterHope.Endpoints; // Для MapUserEndpoints
-using Microsoft.AspNetCore.Authentication.JwtBearer; // Для налаштування JWT
+using ProjectsDonetskWaterHope.Services;
+using ProjectsDonetskWaterHope.Endpoints;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --- 1. ПІДКЛЮЧЕННЯ ДО БАЗИ ДАНИХ ---
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// Вирішення проблеми циклічних посилань JSON
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
 {
     options.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
 });
 
-// --- 2. РЕЄСТРАЦІЯ ВЛАСНИХ СЕРВІСІВ (ВАЖЛИВО!) ---
-builder.Services.AddScoped<TokenService>(); // Сервіс токенів
+builder.Services.AddScoped<TokenService>();
 
-// --- 3. НАЛАШТУВАННЯ АУТЕНТИФІКАЦІЇ (JWT) ---
-// Без цього сервер не зможе перевіряти токени
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]!);
 
@@ -51,9 +46,8 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization(); // Додаємо авторизацію
+builder.Services.AddAuthorization(); 
 builder.Services.AddScoped<LoggerService>();
-// --- 4. НАЛАШТУВАННЯ SWAGGER ---
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -90,7 +84,6 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// --- 5. CORS ---
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
@@ -104,7 +97,6 @@ builder.Services.AddCors(options =>
 
     var app = builder.Build();
 
-// --- 6. PIPELINE ---
 
 
     app.UseSwagger();
@@ -118,16 +110,14 @@ builder.Services.AddCors(options =>
 app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 
-// ВАЖЛИВО: Порядок має значення!
-app.UseAuthentication(); // 1. Хто ти?
-app.UseAuthorization();  // 2. Чи можна тобі сюди?
+app.UseAuthentication(); 
+app.UseAuthorization(); 
 app.MapUserEndpoints();
 app.MapTariffEndpoints();
 app.MapDeviceEndpoints();
 app.MapSupportTicketEndpoints();
 app.MapAlertEndpoints();
 app.MapConsumptionEndpoints();
+app.MapAdminEndpoints();
 
-
-// ... app.UseSwagger(); ...
 app.Run();

@@ -18,7 +18,6 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
 
-                // Валідація девайса
                 if (dto.DeviceId.HasValue)
                 {
                     bool isMyDevice = await db.Devices.AnyAsync(d => d.DeviceId == dto.DeviceId && d.UserId == currentUserId);
@@ -39,7 +38,6 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 db.SupportTickets.Add(ticket);
                 await db.SaveChangesAsync();
 
-                // ЛОГУВАННЯ
                 await logger.LogAsync(
                     "TicketCreated",
                     $"Нове звернення: {ticket.Subject}",
@@ -48,12 +46,10 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 );
 
                 return Results.Created($"/api/tickets/{ticket.SupportTicketId}", new { message = "Звернення створено", id = ticket.SupportTicketId });
-            });
+            }).WithTags("User");
 
-            // --- 2. ОТРИМАННЯ ВСІХ ТІКЕТІВ (Тільки Admin) ---
             group.MapGet("/all", async (HttpContext context, ApplicationDbContext db) =>
             {
-                // Guard Clause: Тільки Адмін
                 if (!context.User.IsInRole("Admin"))
                     return Results.Json(new { error = "Доступ заборонено. Потрібні права адміністратора." }, statusCode: 403);
 
@@ -61,18 +57,18 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 {
                     var tickets = await db.SupportTickets
                         .AsNoTracking()
-                        .Include(t => t.User)   // Обов'язково для AccountNumber
-                        .Include(t => t.Device) // Обов'язково для SerialNumber
+                        .Include(t => t.User)   
+                        .Include(t => t.Device) 
                         .OrderByDescending(t => t.CreatedAt)
                         .Select(t => new SupportTicketDto(
-                            t.SupportTicketId,                                // 1. TicketId
-                            t.Subject,                                        // 2. Subject
-                            t.MessageText,                                    // 3. MessageText
-                            t.Status,                                         // 4. Status
-                            t.CreatedAt,                                      // 5. CreatedAt
-                            t.Comment,                                        // 6. AdminComment
-                            t.Device != null ? t.Device.SerialNumber : null,  // 7. DeviceSerialNumber
-                            t.User != null ? t.User.AccountNumber : "Система" // 8. UserAccountNumber
+                            t.SupportTicketId,                               
+                            t.Subject,                                        
+                            t.MessageText,                                    
+                            t.Status,                                         
+                            t.CreatedAt,                                      
+                            t.Comment,                                        
+                            t.Device != null ? t.Device.SerialNumber : null,  
+                            t.User != null ? t.User.AccountNumber : "Система"
                         ))
                         .ToListAsync();
 
@@ -83,12 +79,10 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     Console.WriteLine($"[Admin Error 500]: {ex.Message}");
                     return Results.Problem("Помилка БД при завантаженні всіх звернень.");
                 }
-            });
+            }).WithTags("Admin");
 
-            // --- 3. ОТРИМАННЯ "МОЇХ" ТІКЕТІВ (Залогінений юзер) ---
             group.MapGet("/my", async (HttpContext context, ApplicationDbContext db) =>
             {
-                // 1. Безпечне отримання ID користувача
                 var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (!int.TryParse(userIdClaim, out int currentUserId))
                     return Results.Unauthorized();
@@ -98,18 +92,18 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     var tickets = await db.SupportTickets
                         .AsNoTracking()
                         .Where(t => t.UserId == currentUserId)
-                        .Include(t => t.User)   // Обов'язково для UserAccountNumber
-                        .Include(t => t.Device) // Обов'язково для DeviceSerialNumber
+                        .Include(t => t.User)   
+                        .Include(t => t.Device) 
                         .OrderByDescending(t => t.CreatedAt)
                         .Select(t => new SupportTicketDto(
-                            t.SupportTicketId,               // 1. TicketId
-                            t.Subject,                       // 2. Subject
-                            t.MessageText,                   // 3. MessageText
-                            t.Status,                        // 4. Status
-                            t.CreatedAt,                     // 5. CreatedAt
-                            t.Comment,                       // 6. AdminComment (Mapped to t.Comment)
-                            t.Device != null ? t.Device.SerialNumber : null, // 7. DeviceSerialNumber
-                            t.User != null ? t.User.AccountNumber : "Невідомо" // 8. UserAccountNumber
+                            t.SupportTicketId,              
+                            t.Subject,                      
+                            t.MessageText,                  
+                            t.Status,                        
+                            t.CreatedAt,                    
+                            t.Comment,                     
+                            t.Device != null ? t.Device.SerialNumber : null, 
+                            t.User != null ? t.User.AccountNumber : "Невідомо" 
                         ))
                         .ToListAsync();
 
@@ -117,29 +111,25 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 }
                 catch (Exception ex)
                 {
-                    // Логування для діагностики в Render
                     Console.WriteLine($"[Error 500]: {ex.Message}");
                     return Results.Problem("Виникла внутрішня помилка при обробці звернень.");
                 }
-            });
+            }).WithTags("User");
 
-            // --- 4. ОТРИМАННЯ КОНКРЕТНОГО ТІКЕТА ПО ID ---
             group.MapGet("/{id}", async (int id, HttpContext context, ApplicationDbContext db) =>
             {
                 if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
                     return Results.Unauthorized();
 
-                // Спочатку шукаємо тікет (без проекції, щоб перевірити права)
                 var ticket = await db.SupportTickets
                     .Include(t => t.User)
                     .Include(t => t.Device)
-                    .AsNoTracking() // Важливо для швидкодії
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(t => t.SupportTicketId == id);
 
                 if (ticket == null)
                     return Results.NotFound(new { message = "Звернення не знайдено." });
 
-                // Перевірка прав: Адмін або Власник
                 bool isAdmin = context.User.IsInRole("Admin");
                 bool isOwner = ticket.UserId == currentUserId;
 
@@ -148,7 +138,6 @@ namespace ProjectsDonetskWaterHope.Endpoints
                     return Results.Json(new { error = "Це не ваше звернення." }, statusCode: 403);
                 }
 
-                // Формуємо DTO вручну, бо ми вже витягли дані з бази
                 var dto = new SupportTicketDto(
                     ticket.SupportTicketId,
                     ticket.Subject,
@@ -161,9 +150,8 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 );
 
                 return Results.Ok(dto);
-            });
+            }).WithTags("Public");
 
-            // --- 5. РЕДАГУВАННЯ (Тільки Admin) ---
             group.MapPatch("/{id}", async (int id, UpdateTicketAdminDto dto, HttpContext context, ApplicationDbContext db) =>
             {
                 if (!context.User.IsInRole("Admin"))
@@ -177,9 +165,8 @@ namespace ProjectsDonetskWaterHope.Endpoints
 
                 await db.SaveChangesAsync();
                 return Results.Ok(new { message = "Звернення оновлено." });
-            });
+            }).WithTags("Admin");
 
-            // --- 6. ВИДАЛЕННЯ (Тільки Admin) ---
             group.MapDelete("/{id}", async (int id, HttpContext context, ApplicationDbContext db) =>
             {
                 if (!context.User.IsInRole("Admin"))
@@ -192,7 +179,7 @@ namespace ProjectsDonetskWaterHope.Endpoints
                 await db.SaveChangesAsync();
 
                 return Results.Ok(new { message = "Звернення видалено." });
-            });
+            }).WithTags("Admin");
         }
     }
 }

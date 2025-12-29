@@ -1,7 +1,7 @@
 
 using ProjectsDonetskWaterHope.Models;
-using ProjectsDonetskWaterHope.Services; // Для PasswordHasher
-using System.Linq; // Потрібно для LINQ запитів
+using ProjectsDonetskWaterHope.Services; 
+using System.Linq; 
 
 namespace ProjectsDonetskWaterHope.Data
 {
@@ -10,16 +10,13 @@ namespace ProjectsDonetskWaterHope.Data
         public static void Seed(ApplicationDbContext db)
         {
           
-            // --- 2. ПЕРЕВІРКА АДМІНА ---
-            // ЗМІНА ТУТ: Ми перевіряємо не "чи пуста база", а "чи є хоч один Адмін"
             bool adminExists = db.Users.Any(u => u.Role == "Admin");
 
             if (adminExists)
             {
-                return; // Якщо адмін вже є - нічого не робимо
+                return; 
             }
 
-            // Якщо дійшли сюди - значить адмінів немає (навіть якщо є юзери)
             var admin = new User
             {
                 AccountNumber = "WH-ADMIN01",
@@ -27,7 +24,7 @@ namespace ProjectsDonetskWaterHope.Data
                 LastName = "Admin",
                 Email = "admin@waterhope.com",
                 PhoneNumber = "0000000000",
-                Role = "Admin", // Важливо!
+                Role = "Admin", 
                 PasswordHash = PasswordHasher.HashPassword("admin123")
             };
 

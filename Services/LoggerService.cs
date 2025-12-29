@@ -14,7 +14,6 @@ namespace ProjectsDonetskWaterHope.Services
 
         public async Task LogAsync(string eventType, string message, int? userId = null, int? deviceId = null)
         {
-            // Створюємо новий scope, щоб отримати DbContext (це важливо для фонових задач)
             using var scope = _serviceProvider.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
