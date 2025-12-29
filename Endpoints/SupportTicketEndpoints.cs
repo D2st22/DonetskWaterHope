@@ -75,23 +75,39 @@ namespace ProjectsDonetskWaterHope.Endpoints
             // --- 3. ОТРИМАННЯ "МОЇХ" ТІКЕТІВ (Залогінений юзер) ---
             group.MapGet("/my", async (HttpContext context, ApplicationDbContext db) =>
             {
-                if (!int.TryParse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int currentUserId))
+                // 1. Безпечне отримання ID користувача
+                var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdClaim, out int currentUserId))
                     return Results.Unauthorized();
 
-                var tickets = await db.SupportTickets
-                    .AsNoTracking()
-                    .Where(t => t.UserId == currentUserId) // Фільтр: Тільки мої
-                    .Include(t => t.User)
-                    .Include(t => t.Device)
-                    .Select(t => new SupportTicketDto(
-                        t.SupportTicketId, t.Subject, t.MessageText, t.Status, t.CreatedAt, t.Comment,
-                        t.Device != null ? t.Device.SerialNumber : null,
-                        t.User.AccountNumber
-                    ))
-                    .OrderByDescending(t => t.CreatedAt)
-                    .ToListAsync();
+                try
+                {
+                    var tickets = await db.SupportTickets
+                        .AsNoTracking()
+                        .Where(t => t.UserId == currentUserId)
+                        .Include(t => t.User)   // Обов'язково для UserAccountNumber
+                        .Include(t => t.Device) // Обов'язково для DeviceSerialNumber
+                        .OrderByDescending(t => t.CreatedAt)
+                        .Select(t => new SupportTicketDto(
+                            t.SupportTicketId,               // 1. TicketId
+                            t.Subject,                       // 2. Subject
+                            t.MessageText,                   // 3. MessageText
+                            t.Status,                        // 4. Status
+                            t.CreatedAt,                     // 5. CreatedAt
+                            t.Comment,                       // 6. AdminComment (Mapped to t.Comment)
+                            t.Device != null ? t.Device.SerialNumber : null, // 7. DeviceSerialNumber
+                            t.User != null ? t.User.AccountNumber : "Невідомо" // 8. UserAccountNumber
+                        ))
+                        .ToListAsync();
 
-                return Results.Ok(tickets);
+                    return Results.Ok(tickets);
+                }
+                catch (Exception ex)
+                {
+                    // Логування для діагностики в Render
+                    Console.WriteLine($"[Error 500]: {ex.Message}");
+                    return Results.Problem("Виникла внутрішня помилка при обробці звернень.");
+                }
             });
 
             // --- 4. ОТРИМАННЯ КОНКРЕТНОГО ТІКЕТА ПО ID ---
