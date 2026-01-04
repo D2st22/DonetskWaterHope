@@ -34,7 +34,7 @@ namespace ProjectsDonetskWaterHope.Validation
             if (phone.StartsWith("+380"))
                 return phone;
 
-            throw new ValidationException("Некоректний номер телефону");
+            throw new ValidationException("РќРµРєРѕСЂРµРєС‚РЅРёР№ РЅРѕРјРµСЂ С‚РµР»РµС„РѕРЅСѓ");
         }
     }
 }
