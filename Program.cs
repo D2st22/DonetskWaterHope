@@ -97,6 +97,32 @@ builder.Services.AddCors(options =>
 
     var app = builder.Build();
 
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Backend-Instance"] =
+        Environment.GetEnvironmentVariable("INSTANCE_NAME") ?? Environment.MachineName;
+    await next();
+});
+
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "Healthy",
+    instance = Environment.GetEnvironmentVariable("INSTANCE_NAME") ?? Environment.MachineName,
+    time = DateTime.UtcNow
+})).WithTags("System");
+
+if (builder.Configuration.GetValue("RUN_MIGRATIONS", true))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+}
+
+if (args.Contains("--migrate-only"))
+{
+    return;
+}
+
 
 
     app.UseSwagger();
@@ -118,6 +144,7 @@ app.MapDeviceEndpoints();
 app.MapSupportTicketEndpoints();
 app.MapAlertEndpoints();
 app.MapConsumptionEndpoints();
+app.MapIotEndpoints();
 app.MapAdminEndpoints();
 
 app.Run();

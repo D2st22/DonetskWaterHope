@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: waterhope
+      POSTGRES_USER: waterhope
+      POSTGRES_PASSWORD: waterhope_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - waterhope_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U waterhope -d waterhope"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api-migrate:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      RUN_MIGRATIONS: "true"
+      INSTANCE_NAME: api-migrate
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=waterhope;Username=waterhope;Password=waterhope_password
+      Jwt__Key: SuperSecretKeyDonetskWaterHope2025!MustBeLong
+      Jwt__Issuer: DonetskWaterHopeServer
+      Jwt__Audience: DonetskWaterHopeClient
+      Jwt__ExpireMinutes: "60"
+    command: ["dotnet", "ProjectsDonetskWaterHope.dll", "--migrate-only"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      RUN_MIGRATIONS: "false"
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=waterhope;Username=waterhope;Password=waterhope_password
+      Jwt__Key: SuperSecretKeyDonetskWaterHope2025!MustBeLong
+      Jwt__Issuer: DonetskWaterHopeServer
+      Jwt__Audience: DonetskWaterHopeClient
+      Jwt__ExpireMinutes: "60"
+    depends_on:
+      api-migrate:
+        condition: service_completed_successfully
+
+  load-balancer:
+    image: nginx:1.27-alpine
+    ports:
+      - "8088:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+
+  locust:
+    image: locustio/locust:2.31.8
+    profiles:
+      - loadtest
+    working_dir: /mnt/locust
+    volumes:
+      - ./locust:/mnt/locust
+    command: ["-f", "locustfile.py", "--host", "http://load-balancer"]
+    ports:
+      - "8089:8089"
+    environment:
+      ACCOUNT_NUMBER: WH-0MWXOUI0
+      PASSWORD: "123456789"
+    depends_on:
+      - load-balancer
+
+volumes:
+  waterhope_pgdata:

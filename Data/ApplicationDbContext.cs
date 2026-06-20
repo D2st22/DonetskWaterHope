@@ -17,6 +17,7 @@ namespace ProjectsDonetskWaterHope.Data
         public DbSet<SupportTicket> SupportTickets { get; set; }
         public DbSet<Alert> Alerts { get; set; }
         public DbSet<SystemLog> SystemLogs { get; set; }
+        public DbSet<IotDeviceStatus> IotDeviceStatuses { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -69,6 +70,16 @@ namespace ProjectsDonetskWaterHope.Data
                 .WithMany(d => d.Alerts) 
                 .HasForeignKey(a => a.DeviceId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<IotDeviceStatus>()
+                .HasOne(s => s.Device)
+                .WithMany()
+                .HasForeignKey(s => s.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<IotDeviceStatus>()
+                .HasIndex(s => s.DeviceId)
+                .IsUnique();
 
             modelBuilder.Entity<Device>()
                 .HasIndex(d => d.SerialNumber)
